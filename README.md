@@ -1,36 +1,106 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🏫 School ERP — Multi-Tenant School Management Platform
 
-## Getting Started
+A modern, full-stack, multi-tenant School Enterprise Resource Planning (ERP) platform built with **Next.js 16**, **TypeScript**, **PostgreSQL**, **Prisma ORM**, and **NextAuth**.
 
-First, run the development server:
+---
 
+## ✨ Core Features & Modules
+
+### 1. 🛡️ Multi-Tenant Architecture & Data Isolation
+- Strict row-level multi-tenancy enforced by Prisma Client Extensions.
+- **21 Tenant-Scoped Models** verified by automated schema drift guards and isolation regression suites.
+- Dedicated tenant scoping prevents cross-school data leakage across all queries, mutations, and upserts.
+
+### 2. 👥 User Roles & Portals
+- **Admin & Principal**: Full school configuration, class & section management, student admissions, faculty roster, department hierarchy, fee structures, notices, certificates, TC register, and leave approval.
+- **Teacher**: Daily period timetable, syllabus milestone tracking, marks entry, attendance marking, homework & notes publishing, and personal leave applications.
+- **Parent**: Multi-child switcher, class weekly timetable, subject syllabus progress, homework with attachment downloads, fee invoices, payment receipts, and attendance tracking.
+- **Accountant**: Fee structures, invoice generation, fee collection, and printable receipt generation.
+
+### 3. 🏢 Staff & Operations (Batch A)
+- **Departments**: Academic & administrative department hierarchy, Head of Department (HOD) assignments, and teacher rosters.
+- **Staff Leave Management**: Leave applications (CL, ML, EL, etc.), review dashboard, and 1-click approval/rejection with administrator remarks.
+- **Class Designations**: Section leadership titles (*Class Monitor*, *Sports Captain*, *House Captain*, *Prefect*).
+- **Assignments & Notes**: Study notes and homework publication with attachments (up to 10MB), filtered by *Upcoming* vs *Past Due*.
+
+### 4. 📅 Academics, Timetable & Syllabus
+- **Daily Period Structure**: Configurable school bell schedules with teaching periods and break/recess slots.
+- **Weekly Class Timetable**: Section-based weekly matrix with period rows, day columns, and conflict-free slot assignments.
+- **Syllabus Tracker**: Chapter/topic completion tracking with progress bars.
+
+### 5. 📜 Official Certificates & TC Register
+- **Certificate Templates**: Bonafide Certificates, Transfer Certificates (TC), and Character Certificates with live print/PDF generation (`html2pdf.js`).
+- **TC Register**: Permanent administrative registry of all issued Transfer Certificates.
+
+---
+
+## 🛠️ Technology Stack
+
+- **Framework**: Next.js 16 (App Router, Turbopack)
+- **Language**: TypeScript 5
+- **Database**: PostgreSQL with Prisma ORM
+- **Authentication**: NextAuth.js
+- **Styling**: Vanilla CSS design system with CSS custom properties
+- **Icons**: Lucide React
+- **PDF Generation**: html2pdf.js
+
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+- Node.js 18+
+- PostgreSQL database instance
+
+### 1. Clone & Install Dependencies
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+git clone https://github.com/prasadshirfule/school-erp.git
+cd school-erp
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 2. Configure Environment Variables
+Copy `.env.example` to `.env`:
+```bash
+cp .env.example .env
+```
+Update `DATABASE_URL` with your PostgreSQL connection string:
+```env
+DATABASE_URL="postgresql://username:password@localhost:5432/school_erp"
+NEXTAUTH_SECRET="your-secret-key"
+NEXTAUTH_URL="http://localhost:3000"
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 3. Database Migration & Seeding
+```bash
+# Run database migrations
+npx prisma migrate dev
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+# Seed baseline demo data (schools, users, classes, subjects, fees)
+npx prisma db seed
+```
 
-## Learn More
+### 4. Run Test Suites
+```bash
+# Check tenant scoping drift guard (verifies all 21 models)
+npm run check:tenant-scoping
 
-To learn more about Next.js, take a look at the following resources:
+# Run 29-point tenant isolation regression suite
+npm run test:tenant
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### 5. Start Development Server
+```bash
+npm run dev
+```
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+---
 
-## Deploy on Vercel
+## 🧪 Verification Commands
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+| Command | Purpose |
+| :--- | :--- |
+| `npm run check:tenant-scoping` | Verifies that all Prisma models with `schoolId` are registered in `TENANT_SCOPED_MODELS` |
+| `npm run test:tenant` | Executes comprehensive isolation test suite (29/29 assertions) |
+| `npm run build` | Full production build and static type verification |
