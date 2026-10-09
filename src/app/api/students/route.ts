@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { getTenantDb, unauthorized, badRequest } from "@/lib/utils";
 import { Prisma } from "@prisma/client";
-import prisma from "@/lib/prisma";
 import { calculateInvoiceStatus } from "@/lib/invoiceStatus";
+import { StudentCreateSchema } from "@/lib/validations";
+import { encryptPII } from "@/lib/security";
 
 export async function GET(request: Request) {
   const ctx = await getTenantDb();
@@ -37,7 +38,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const body = await request.json();
+  const json = await request.json();
+  const parsed = StudentCreateSchema.safeParse(json);
+  if (!parsed.success) {
+    return badRequest(parsed.error.issues[0]?.message || "Invalid student data");
+  }
+
   const {
     fullName,
     rollNumber,
@@ -66,19 +72,13 @@ export async function POST(request: Request) {
     emergencyContactPhone,
     medicalConditions,
     photoUrl,
+    classDesignation,
     // Fee details
     totalFees,
     amountPaidNow,
     dueDate,
     paymentMethod,
-  } = body;
-
-  if (!fullName || typeof fullName !== "string" || fullName.trim() === "") {
-    return badRequest("fullName is required");
-  }
-  if (!dob) {
-    return badRequest("dob is required");
-  }
+  } = parsed.data;
 
   const schoolId = ctx.session.user.schoolId;
   const currentYear = new Date().getFullYear();
@@ -86,13 +86,13 @@ export async function POST(request: Request) {
   const normalizedFullName = fullName.trim().toUpperCase();
 
   try {
-    const result = await prisma.$transaction(async (tx) => {
+    const db = ctx.db;
+    const result = await (db as any).$transaction(async (tx: any) => {
       // Auto-generate admission number: AY-{currentYear}-{4-digit sequential number}
       const prefix = `AY-${currentYear}-`;
 
       const existingStudents = await tx.student.findMany({
         where: {
-          schoolId,
           admissionNo: { startsWith: prefix },
         },
         select: { admissionNo: true },
@@ -110,10 +110,9 @@ export async function POST(request: Request) {
       const nextSeq = maxSeq + 1;
       const admissionNo = `${prefix}${String(nextSeq).padStart(4, "0")}`;
 
-      // Create student record (sectionId is optional)
+      // Create student record with encrypted sensitive PII
       const student = await tx.student.create({
         data: {
-          schoolId,
           admissionNo,
           rollNumber: rollNumber?.trim() || null,
           fullName: normalizedFullName,
@@ -121,10 +120,10 @@ export async function POST(request: Request) {
           sectionId: sectionId?.trim() || null,
           academicYear: yearStr,
           photoUrl: photoUrl?.trim() || null,
+          classDesignation: classDesignation?.trim() || null,
           gender: gender?.trim() || null,
           bloodGroup: bloodGroup?.trim() || null,
-          // Sensitive PII: stored as plain text for MVP; future hardening: encryption at rest, restricted display
-          aadharNumber: aadharNumber?.trim() || null,
+          aadharNumber: aadharNumber ? encryptPII(aadharNumber.trim()) : null,
           category: category?.trim() || null,
           currentAddress: currentAddress?.trim() || null,
           permanentAddress: permanentAddress?.trim() || null,
@@ -142,7 +141,7 @@ export async function POST(request: Request) {
           guardianPhone: guardianPhone?.trim() || null,
           emergencyContactName: emergencyContactName?.trim() || null,
           emergencyContactPhone: emergencyContactPhone?.trim() || null,
-          medicalConditions: medicalConditions?.trim() || null,
+          medicalConditions: medicalConditions ? encryptPII(medicalConditions.trim()) : null,
         },
         include: {
           section: { include: { class: true } },
@@ -167,7 +166,6 @@ export async function POST(request: Request) {
         // Find or create generic FeeStructure for Admission Fee in this academic year
         let feeStructure = await tx.feeStructure.findFirst({
           where: {
-            schoolId,
             name: `Admission Fee - ${yearStr}`,
             academicYear: yearStr,
           },
@@ -176,7 +174,6 @@ export async function POST(request: Request) {
         if (!feeStructure) {
           feeStructure = await tx.feeStructure.create({
             data: {
-              schoolId,
               name: `Admission Fee - ${yearStr}`,
               academicYear: yearStr,
               amount: dueDecimal,
@@ -194,7 +191,6 @@ export async function POST(request: Request) {
 
         const invoice = await tx.feeInvoice.create({
           data: {
-            schoolId,
             studentId: student.id,
             feeStructureId: feeStructure.id,
             amountDue: dueDecimal,
@@ -205,11 +201,9 @@ export async function POST(request: Request) {
         });
 
         if (paidDecimal.greaterThan(0)) {
-          // Generate sequential receipt number: REC-{currentYear}-{4-digit}
           const recPrefix = `REC-${currentYear}-`;
           const existingPayments = await tx.payment.findMany({
             where: {
-              schoolId,
               receiptNumber: { startsWith: recPrefix },
             },
             select: { receiptNumber: true },
@@ -228,7 +222,6 @@ export async function POST(request: Request) {
 
           await tx.payment.create({
             data: {
-              schoolId,
               invoiceId: invoice.id,
               amount: paidDecimal,
               method: paymentMethod || "CASH",

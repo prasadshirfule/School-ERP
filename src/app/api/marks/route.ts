@@ -160,7 +160,7 @@ export async function POST(request: Request) {
 
   // 3. If user is a TEACHER, verify they are assigned to this subject via TeacherSubject
   if (role === "TEACHER") {
-    const teacher = await prisma.teacher.findUnique({
+    const teacher = await ctx.db.teacher.findUnique({
       where: { userId: ctx.session.user.id },
       include: {
         subjects: true,
@@ -171,7 +171,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Teacher profile not found" }, { status: 403 });
     }
 
-    const isAssigned = teacher.subjects.some((ts) => ts.subjectId === subjectId);
+    const isAssigned = teacher.subjects.some((ts: any) => ts.subjectId === subjectId);
     if (!isAssigned) {
       return NextResponse.json(
         { error: "You are not authorized to enter marks for this subject" },
@@ -188,7 +188,7 @@ export async function POST(request: Request) {
     },
     select: { id: true },
   });
-  const validStudentIdSet = new Set(validStudents.map((s) => s.id));
+  const validStudentIdSet = new Set(validStudents.map((s: any) => s.id));
 
   // Validate values
   for (const rec of records) {
@@ -220,12 +220,14 @@ export async function POST(request: Request) {
 
   // 5. Execute upserts within a transaction
   try {
-    const upserted = await prisma.$transaction(
-      records.map((rec) => {
+    const db = ctx.db;
+    const upserted = await (db as any).$transaction(async (tx: any) => {
+      const results = [];
+      for (const rec of records) {
         const scoreDecimal = new Prisma.Decimal(parseFloat(String(rec.score)).toFixed(2));
         const maxScoreDecimal = new Prisma.Decimal(parseFloat(String(rec.maxScore)).toFixed(2));
 
-        return prisma.marks.upsert({
+        const res = await tx.marks.upsert({
           where: {
             studentId_subjectId_examName: {
               studentId: rec.studentId,
@@ -245,8 +247,10 @@ export async function POST(request: Request) {
             maxScore: maxScoreDecimal,
           },
         });
-      })
-    );
+        results.push(res);
+      }
+      return results;
+    });
 
     return NextResponse.json({
       message: `Successfully saved marks for ${upserted.length} student(s) in "${trimmedExamName}"`,

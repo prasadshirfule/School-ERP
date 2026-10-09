@@ -11,7 +11,7 @@ export async function GET() {
   if (!ctx) return unauthorized();
 
   // Get the teacher profile for this user
-  const teacher = await prisma.teacher.findUnique({
+  const teacher = await ctx.db.teacher.findUnique({
     where: { userId: ctx.session.user.id },
   });
 

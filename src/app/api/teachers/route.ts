@@ -100,7 +100,7 @@ export async function POST(request: Request) {
   const schoolId = ctx.session.user.schoolId;
 
   // Check if user with this email already exists
-  const existingUser = await prisma.user.findUnique({
+  const existingUser = await ctx.db.user.findFirst({
     where: { email: normalizedEmail },
   });
   if (existingUser) {
@@ -110,10 +110,10 @@ export async function POST(request: Request) {
   const passwordHash = await bcrypt.hash(password, 10);
 
   try {
-    const result = await prisma.$transaction(async (tx) => {
+    const db = ctx.db;
+    const result = await (db as any).$transaction(async (tx: any) => {
       const user = await tx.user.create({
         data: {
-          schoolId,
           email: normalizedEmail,
           phone: phone?.trim() || null,
           passwordHash,
@@ -174,7 +174,7 @@ export async function PATCH(request: Request) {
   }
 
   // Find teacher record
-  const teacher = await prisma.teacher.findUnique({
+  const teacher = await ctx.db.teacher.findUnique({
     where: { id: teacherId },
     include: { user: true },
   });
@@ -184,7 +184,8 @@ export async function PATCH(request: Request) {
   }
 
   try {
-    const result = await prisma.$transaction(async (tx) => {
+    const db = ctx.db;
+    const result = await (db as any).$transaction(async (tx: any) => {
       if (fullName) {
         await tx.teacher.update({
           where: { id: teacherId },

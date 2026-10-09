@@ -32,16 +32,13 @@ export async function POST(request: Request) {
           academicYear: true,
         },
       },
+      school: true,
     },
   });
 
   if (!student) return badRequest("Student not found");
 
-  // Fetch school info (unscoped — School model is the tenant itself)
-  const school = await prisma.school.findUnique({
-    where: { id: ctx.session.user.schoolId },
-  });
-
+  const school = student.school;
   if (!school) return badRequest("School not found");
 
   const certificateData: any = {

@@ -10,7 +10,7 @@ export async function GET() {
 
   // If TEACHER: only return subjects assigned to this teacher via TeacherSubject
   if (role === "TEACHER") {
-    const teacher = await prisma.teacher.findUnique({
+    const teacher = await ctx.db.teacher.findUnique({
       where: { userId: ctx.session.user.id },
       include: {
         subjects: {
@@ -26,9 +26,9 @@ export async function GET() {
     }
 
     const assignedSubjects = teacher.subjects
-      .map((ts) => ts.subject)
-      .filter((s) => s.schoolId === ctx.session.user.schoolId)
-      .sort((a, b) => a.name.localeCompare(b.name));
+      .map((ts: any) => ts.subject)
+      .filter((s: any) => s.schoolId === ctx.session.user.schoolId)
+      .sort((a: any, b: any) => a.name.localeCompare(b.name));
 
     return NextResponse.json(assignedSubjects);
   }
@@ -76,12 +76,12 @@ export async function POST(request: Request) {
   // If created by a teacher, automatically link TeacherSubject so the teacher can immediately use it
   const role = ctx.session.user.role;
   if (role === "TEACHER") {
-    const teacher = await prisma.teacher.findUnique({
+    const teacher = await ctx.db.teacher.findUnique({
       where: { userId: ctx.session.user.id },
     });
 
     if (teacher) {
-      await prisma.teacherSubject.upsert({
+      await ctx.db.teacherSubject.upsert({
         where: {
           teacherId_subjectId: {
             teacherId: teacher.id,

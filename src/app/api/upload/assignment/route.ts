@@ -1,27 +1,24 @@
-// TEMPORARY: local disk storage for MVP/dev only. Must be replaced with cloud object storage (R2/S3) before deploying to a real hosted server — local disk storage does not survive redeploys or scale across multiple server instances.
-
 import { NextResponse } from "next/server";
 import { getRequiredSession, unauthorized, badRequest } from "@/lib/utils";
-import fs from "fs";
+import { storage } from "@/lib/storage";
 import path from "path";
-import crypto from "crypto";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-const ALLOWED_MIME_TYPES: Record<string, string> = {
-  "application/pdf": ".pdf",
-  "application/msword": ".doc",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
-  "application/vnd.ms-excel": ".xls",
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
-  "application/vnd.ms-powerpoint": ".ppt",
-  "application/vnd.openxmlformats-officedocument.presentationml.presentation": ".pptx",
-  "text/plain": ".txt",
-  "image/jpeg": ".jpg",
-  "image/jpg": ".jpg",
-  "image/png": ".png",
-  "image/webp": ".webp",
-  "application/zip": ".zip",
-};
+const ALLOWED_EXTENSIONS = new Set([
+  ".pdf",
+  ".doc",
+  ".docx",
+  ".xls",
+  ".xlsx",
+  ".ppt",
+  ".pptx",
+  ".txt",
+  ".jpg",
+  ".jpeg",
+  ".png",
+  ".webp",
+  ".zip",
+]);
 
 export async function POST(request: Request) {
   const session = await getRequiredSession();
@@ -53,43 +50,31 @@ export async function POST(request: Request) {
       return badRequest("File is empty");
     }
 
-    const mimeType = file.type.toLowerCase();
-    let ext = ALLOWED_MIME_TYPES[mimeType];
-    if (!ext) {
-      // Fallback check based on original filename extension
-      const origExt = path.extname(file.name).toLowerCase();
-      if ([".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".txt", ".jpg", ".jpeg", ".png", ".webp", ".zip"].includes(origExt)) {
-        ext = origExt;
-      } else {
-        return badRequest(
-          `Invalid file type. Allowed formats: PDF, DOC/DOCX, XLS/XLSX, PPT/PPTX, TXT, Images (JPG/PNG/WebP), ZIP.`
-        );
-      }
+    const origExt = path.extname(file.name || "").toLowerCase();
+    if (!ALLOWED_EXTENSIONS.has(origExt)) {
+      return badRequest(
+        `Invalid file type (${origExt}). Allowed formats: PDF, Word, Excel, PowerPoint, Text, Images, and ZIP.`
+      );
     }
-
-    const uploadsDir = path.join(process.cwd(), "public", "uploads", "assignments");
-    if (!fs.existsSync(uploadsDir)) {
-      fs.mkdirSync(uploadsDir, { recursive: true });
-    }
-
-    const randomHex = crypto.randomBytes(8).toString("hex");
-    const cleanOrigName = path.basename(file.name, path.extname(file.name)).replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 30);
-    const filename = `assignment_${Date.now()}_${cleanOrigName}_${randomHex}${ext}`;
-    const filePath = path.join(uploadsDir, filename);
 
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
-    fs.writeFileSync(filePath, buffer);
 
-    const url = `/uploads/assignments/${filename}`;
+    const result = await storage.upload({
+      buffer,
+      filename: file.name || "attachment.pdf",
+      folder: "assignments",
+      contentType: file.type,
+    });
 
     return NextResponse.json({
-      url,
+      url: result.url,
       filename: file.name,
       size: file.size,
-      mimeType,
+      mimeType: file.type,
     });
   } catch (error: any) {
     return badRequest(error.message || "Failed to process assignment attachment");
   }
 }
+

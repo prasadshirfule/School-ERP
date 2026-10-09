@@ -58,17 +58,16 @@ export async function POST(request: Request) {
   const academicYear = "2026-27"; // Default academic year
 
   try {
-    const result = await prisma.$transaction(async (tx) => {
+    const db = ctx.db;
+    const result = await (db as any).$transaction(async (tx: any) => {
       // Auto-compute sort order: highest existing order + 1 (or 1 if none)
       const maxResult = await tx.class.aggregate({
-        where: { schoolId },
         _max: { order: true },
       });
       const nextOrder = (maxResult._max.order ?? 0) + 1;
 
       const cls = await tx.class.create({
         data: {
-          schoolId,
           name: name.trim(),
           order: nextOrder,
         },
@@ -76,7 +75,6 @@ export async function POST(request: Request) {
 
       // Create all sections
       const sectionData = sections.map((sec: any) => ({
-        schoolId,
         classId: cls.id,
         name: sec.name.trim(),
         academicYear,

@@ -8,12 +8,12 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "check:tenant-scoping": "ts-node -O \"{\\\"module\\\":\\\"commonjs\\\"}\" scripts/check-tenant-scoping.ts",
-    "test:tenant": "ts-node -O \"{\\\"module\\\":\\\"commonjs\\\"}\" scripts/test-tenant-isolation.ts",
-    "test:auth": "ts-node -O \"{\\\"module\\\":\\\"commonjs\\\"}\" scripts/test-login-auth.ts"
+    "check:tenant-scoping": "ts-node scripts/check-tenant-scoping.ts",
+    "test:tenant": "ts-node scripts/test-tenant-isolation.ts",
+    "test:auth": "ts-node scripts/test-login-auth.ts"
   },
   "prisma": {
-    "seed": "ts-node -O \"{\\\"module\\\":\\\"commonjs\\\"}\" prisma/seed.ts"
+    "seed": "ts-node prisma/seed.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
@@ -24,7 +24,8 @@
     "next-auth": "^4.24.15",
     "prisma": "^6.19.3",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

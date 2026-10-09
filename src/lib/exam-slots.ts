@@ -1,4 +1,4 @@
-import prisma from "./prisma";
+import { tenantClient } from "./tenant";
 
 export interface DefaultSlotDef {
   code: string;
@@ -22,8 +22,9 @@ export const DEFAULT_EXAM_SLOTS: DefaultSlotDef[] = [
  * If none exist, auto-seeds them so teachers and report cards never hit a dead end.
  */
 export async function getOrCreateExamSlots(schoolId: string, academicYear: string) {
-  const existing = await prisma.examSlot.findMany({
-    where: { schoolId, academicYear },
+  const db = tenantClient(schoolId);
+  const existing = await db.examSlot.findMany({
+    where: { academicYear },
     orderBy: { order: "asc" },
   });
 
@@ -32,32 +33,30 @@ export async function getOrCreateExamSlots(schoolId: string, academicYear: strin
   }
 
   // Auto-seed the 6 standard slots
-  await prisma.$transaction(
-    DEFAULT_EXAM_SLOTS.map((slot) =>
-      prisma.examSlot.upsert({
-        where: {
-          schoolId_academicYear_code: {
-            schoolId,
-            academicYear,
-            code: slot.code,
-          },
-        },
-        create: {
+  for (const slot of DEFAULT_EXAM_SLOTS) {
+    await db.examSlot.upsert({
+      where: {
+        schoolId_academicYear_code: {
           schoolId,
           academicYear,
           code: slot.code,
-          name: slot.name,
-          term: slot.term,
-          maxScore: slot.maxScore,
-          order: slot.order,
         },
-        update: {},
-      })
-    )
-  );
+      },
+      create: {
+        academicYear,
+        code: slot.code,
+        name: slot.name,
+        term: slot.term,
+        maxScore: slot.maxScore,
+        order: slot.order,
+      } as any,
+      update: {},
+    });
+  }
 
-  return prisma.examSlot.findMany({
-    where: { schoolId, academicYear },
+  return db.examSlot.findMany({
+    where: { academicYear },
     orderBy: { order: "asc" },
   });
 }
+

@@ -1,8 +1,36 @@
 import { NextResponse } from "next/server";
 import { getTenantDb, unauthorized, badRequest } from "@/lib/utils";
-import { Prisma, InvoiceStatus } from "@prisma/client";
-import prisma from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import { calculateInvoiceStatus } from "@/lib/invoiceStatus";
+import { PaymentRecordSchema } from "@/lib/validations";
+
+export async function GET(request: Request) {
+  const ctx = await getTenantDb();
+  if (!ctx) return unauthorized();
+
+  const { searchParams } = new URL(request.url);
+  const invoiceId = searchParams.get("invoiceId");
+  const studentId = searchParams.get("studentId");
+
+  const where: any = {};
+  if (invoiceId) where.invoiceId = invoiceId;
+  if (studentId) where.invoice = { studentId };
+
+  const payments = await ctx.db.payment.findMany({
+    where,
+    include: {
+      invoice: {
+        include: {
+          student: true,
+          feeStructure: true,
+        },
+      },
+    },
+    orderBy: { paidAt: "desc" },
+  });
+
+  return NextResponse.json(payments);
+}
 
 export async function POST(request: Request) {
   const ctx = await getTenantDb();
@@ -16,12 +44,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const body = await request.json();
-  const { invoiceId, amount, method, receiptNumber } = body;
-
-  if (!invoiceId || !amount || !method || !receiptNumber) {
-    return badRequest("invoiceId, amount, method, and receiptNumber are required");
+  const json = await request.json();
+  const parsed = PaymentRecordSchema.safeParse(json);
+  if (!parsed.success) {
+    return badRequest(parsed.error.issues[0]?.message || "Invalid payment data");
   }
+
+  const { invoiceId, amount, method, gatewayRef } = parsed.data;
 
   // Fetch the invoice (tenant-scoped)
   const invoice = await ctx.db.feeInvoice.findFirst({
@@ -39,42 +68,62 @@ export async function POST(request: Request) {
 
   const paymentAmount = new Prisma.Decimal(amount);
 
-  // Calculate total paid so far using Decimal arithmetic
+  // Calculate total paid so far
   let totalPaid = new Prisma.Decimal(0);
   for (const p of invoice.payments) {
     totalPaid = totalPaid.add(p.amount);
   }
   totalPaid = totalPaid.add(paymentAmount);
 
-  const effectiveDue = invoice.amountDue;
-
   // Determine new status using shared Decimal calculator
   const newStatus = calculateInvoiceStatus(invoice.amountDue, totalPaid);
 
-  // Create payment and update invoice status in a transaction
-  // Note: using the base prisma client for the transaction because
-  // the tenant extension wraps individual operations. The schoolId
-  // is passed explicitly into the payment create.
-  const [payment] = await prisma.$transaction([
-    prisma.payment.create({
+  const currentYear = new Date().getFullYear();
+  const recPrefix = `REC-${currentYear}-`;
+
+  const existingPayments = await ctx.db.payment.findMany({
+    where: {
+      receiptNumber: { startsWith: recPrefix },
+    },
+    select: { receiptNumber: true },
+  });
+
+  let maxRecSeq = 0;
+  for (const p of existingPayments) {
+    const parts = p.receiptNumber.split("-");
+    const num = parseInt(parts[parts.length - 1], 10);
+    if (!isNaN(num) && num > maxRecSeq) {
+      maxRecSeq = num;
+    }
+  }
+
+  const receiptNumber = json.receiptNumber || `${recPrefix}${String(maxRecSeq + 1).padStart(4, "0")}`;
+
+  const db = ctx.db;
+  const result = await (db as any).$transaction(async (tx: any) => {
+    const payment = await tx.payment.create({
       data: {
-        schoolId: ctx.session.user.schoolId,
         invoiceId,
         amount: paymentAmount,
         method,
         receiptNumber,
+        gatewayRef: gatewayRef || null,
+        paidAt: new Date(),
       },
-    }),
-    prisma.feeInvoice.update({
+    });
+
+    await tx.feeInvoice.update({
       where: { id: invoiceId },
       data: { status: newStatus },
-    }),
-  ]);
+    });
+
+    return payment;
+  });
 
   return NextResponse.json(
     {
-      ...payment,
-      amount: payment.amount.toFixed(2),
+      ...result,
+      amount: result.amount.toFixed(2),
       newInvoiceStatus: newStatus,
     },
     { status: 201 }
