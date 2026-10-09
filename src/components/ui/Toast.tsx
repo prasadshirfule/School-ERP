@@ -16,6 +16,7 @@ export interface ToastItem {
 interface ToastContextType {
   toasts: ToastItem[];
   showToast: (message: string, type?: ToastType, title?: string, duration?: number) => void;
+  addToast: (type: ToastType, message: string, title?: string, duration?: number) => void;
   success: (message: string, title?: string) => void;
   error: (message: string, title?: string) => void;
   info: (message: string, title?: string) => void;
@@ -48,13 +49,20 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     [removeToast]
   );
 
+  const addToast = useCallback(
+    (type: ToastType, message: string, title?: string, duration: number = 4000) => {
+      showToast(message, type, title, duration);
+    },
+    [showToast]
+  );
+
   const success = useCallback((message: string, title?: string) => showToast(message, "success", title), [showToast]);
   const error = useCallback((message: string, title?: string) => showToast(message, "error", title), [showToast]);
   const info = useCallback((message: string, title?: string) => showToast(message, "info", title), [showToast]);
   const warning = useCallback((message: string, title?: string) => showToast(message, "warning", title), [showToast]);
 
   return (
-    <ToastContext.Provider value={{ toasts, showToast, success, error, info, warning, removeToast }}>
+    <ToastContext.Provider value={{ toasts, showToast, addToast, success, error, info, warning, removeToast }}>
       {children}
       <ToastContainer toasts={toasts} onDismiss={removeToast} />
     </ToastContext.Provider>
