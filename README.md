@@ -1,58 +1,82 @@
-# 🏫 School ERP — Multi-Tenant School Management Platform
+# 🏫 School ERP — Multi-Tenant School Management Platform (CBSE / ICSE / State Boards)
 
-A modern, full-stack, multi-tenant School Enterprise Resource Planning (ERP) platform built with **Next.js 16**, **TypeScript**, **PostgreSQL**, **Prisma ORM**, and **NextAuth**.
+A commercially usable, production-ready School Enterprise Resource Planning (ERP) platform built with **Next.js 16 (App Router)**, **TypeScript**, **PostgreSQL**, **Prisma ORM (Client Extension for Row-Level Multi-Tenancy)**, and **NextAuth**.
+
+---
+
+## 🏗️ Multi-Tenancy Architecture
+
+```
+                                  ┌────────────────────────┐
+                                  │   Incoming HTTP Req    │
+                                  └───────────┬────────────┘
+                                              │
+                                              ▼
+                                  ┌────────────────────────┐
+                                  │  NextAuth Session Auth │
+                                  │   Extracts: schoolId   │
+                                  └───────────┬────────────┘
+                                              │
+                                              ▼
+                    ┌──────────────────────────────────────────────────┐
+                    │      Tenant Client (src/lib/tenant.ts)           │
+                    │   Auto-injects schoolId into query where/data    │
+                    │   Blocks cross-tenant updates/upserts/deletes    │
+                    └─────────────────────────┬────────────────────────┘
+                                              │
+                                              ▼
+                                  ┌────────────────────────┐
+                                  │   Prisma ORM Client    │
+                                  │   PostgreSQL Database  │
+                                  └────────────────────────┘
+```
+
+- **Row-Level Tenant Isolation**: Injected automatically across all operations. No query can read, mutate, or delete records belonging to another school.
+- **21 Tenant-Scoped Models**:
+  `User`, `Student`, `Parent`, `Class`, `Section`, `Subject`, `FeeStructure`, `FeeInvoice`, `Payment`, `Attendance`, `GradingScale`, `ExamSlot`, `ReportCard`, `Notice`, `Period`, `TimetableSlot`, `SyllabusTopic`, `CertificateLog`, `Department`, `LeaveRequest`, `Assignment`.
+- **Automated Schema Drift Guard**: `npm run check:tenant-scoping` introspects Prisma DMMF to block any un-scoped tenant models in CI/CD and development.
 
 ---
 
 ## ✨ Core Features & Modules
 
-### 1. 🛡️ Multi-Tenant Architecture & Data Isolation
-- Strict row-level multi-tenancy enforced by Prisma Client Extensions.
-- **21 Tenant-Scoped Models** verified by automated schema drift guards and isolation regression suites.
-- Dedicated tenant scoping prevents cross-school data leakage across all queries, mutations, and upserts.
-
-### 2. 👥 User Roles & Portals
-- **Admin & Principal**: Full school configuration, class & section management, student admissions, faculty roster, department hierarchy, fee structures, notices, certificates, TC register, and leave approval.
+### 1. 👥 User Roles & Role-Based Portals
+- **Admin & Principal**: Full school configuration, class & section management, student admissions, cohort promotion, faculty roster, department hierarchy, fee structures, notices, certificates, TC register, and leave approval.
 - **Teacher**: Daily period timetable, syllabus milestone tracking, marks entry, attendance marking, homework & notes publishing, and personal leave applications.
 - **Parent**: Multi-child switcher, class weekly timetable, subject syllabus progress, homework with attachment downloads, fee invoices, payment receipts, and attendance tracking.
-- **Accountant**: Fee structures, invoice generation, fee collection, and printable receipt generation.
+- **Accountant**: Fee structures, bulk invoice generation, payment collection, and printable receipt generation.
 
-### 3. 🏢 Staff & Operations (Batch A)
-- **Departments**: Academic & administrative department hierarchy, Head of Department (HOD) assignments, and teacher rosters.
-- **Staff Leave Management**: Leave applications (CL, ML, EL, etc.), review dashboard, and 1-click approval/rejection with administrator remarks.
-- **Class Designations**: Section leadership titles (*Class Monitor*, *Sports Captain*, *House Captain*, *Prefect*).
-- **Assignments & Notes**: Study notes and homework publication with attachments (up to 10MB), filtered by *Upcoming* vs *Past Due*.
+### 2. 🛡️ Security & PII Protection
+- **PII Encryption at Rest**: AES-256-GCM encryption for sensitive student data (Aadhaar numbers, medical conditions) via `src/lib/security.ts`.
+- **Aadhaar Masking**: Displays only last 4 digits (`XXXX-XXXX-1234`) on parent/teacher views.
+- **Rate Limiting**: Sliding-window rate limiter for sensitive endpoints.
+- **Zod Validation**: Strict schema validation on all incoming API requests via `src/lib/validations.ts`.
 
-### 4. 📅 Academics, Timetable & Syllabus
-- **Daily Period Structure**: Configurable school bell schedules with teaching periods and break/recess slots.
-- **Weekly Class Timetable**: Section-based weekly matrix with period rows, day columns, and conflict-free slot assignments.
-- **Syllabus Tracker**: Chapter/topic completion tracking with progress bars.
+### 3. 📂 Storage Abstraction
+- Unified `src/lib/storage.ts` driver supporting local disk storage during development and pluggable Cloudflare R2 / AWS S3 storage for cloud deployments.
+- Supports student photos, school logos, assignment attachments (up to 10MB), and certificate assets.
 
-### 5. 📜 Official Certificates & TC Register
-- **Certificate Templates**: Bonafide Certificates, Transfer Certificates (TC), and Character Certificates with live print/PDF generation (`html2pdf.js`).
-- **TC Register**: Permanent administrative registry of all issued Transfer Certificates.
+### 4. 🎓 Academic Management & Year Rollover
+- **Student Promotion Workflow**: Promote cohorts (e.g., Class 5-A → Class 6-A), retain students, or graduate outgoing batches while preserving past academic year records.
+- **Configurable Grading Scales**: CBSE 9-point, ICSE percentage, or custom board grading per school.
+- **Examinations & Report Cards**: Term-wise marks entry, automated grade calculation, and downloadable official Report Card PDF.
+
+### 5. 💳 Fees & Invoicing Module
+- Class & Academic Year linked fee structures (Tuition, Lab, Activity, Admission).
+- Bulk invoice generation for classes/sections with custom due dates and discount support.
+- Payment recording with auto status updates (`UNPAID`, `PARTIALLY_PAID`, `PAID`, `OVERDUE`).
+- Downloadable official PDF payment receipts.
+
+### 6. 📅 Timetable & Attendance
+- Configurable bell schedule (teaching periods + recess/lunch).
+- Section weekly timetable with teacher conflict detection.
+- Fast attendance marking, monthly attendance percentages, and absentee alert roster generator.
 
 ---
 
-## 🛠️ Technology Stack
+## 🚀 Quick Start
 
-- **Framework**: Next.js 16 (App Router, Turbopack)
-- **Language**: TypeScript 5
-- **Database**: PostgreSQL with Prisma ORM
-- **Authentication**: NextAuth.js
-- **Styling**: Vanilla CSS design system with CSS custom properties
-- **Icons**: Lucide React
-- **PDF Generation**: html2pdf.js
-
----
-
-## 🚀 Getting Started
-
-### Prerequisites
-- Node.js 18+
-- PostgreSQL database instance
-
-### 1. Clone & Install Dependencies
+### 1. Clone & Install
 ```bash
 git clone https://github.com/prasadshirfule/school-erp.git
 cd school-erp
@@ -64,25 +88,20 @@ Copy `.env.example` to `.env`:
 ```bash
 cp .env.example .env
 ```
-Update `DATABASE_URL` with your PostgreSQL connection string:
-```env
-DATABASE_URL="postgresql://username:password@localhost:5432/school_erp"
-NEXTAUTH_SECRET="your-secret-key"
-NEXTAUTH_URL="http://localhost:3000"
-```
+Ensure your `DATABASE_URL`, `NEXTAUTH_SECRET`, and `PII_ENCRYPTION_KEY` are configured.
 
-### 3. Database Migration & Seeding
+### 3. Database Migration & Seed
 ```bash
-# Run database migrations
-npx prisma migrate dev
+# Push schema to database
+npx prisma db push
 
-# Seed baseline demo data (schools, users, classes, subjects, fees)
-npx prisma db seed
+# Seed realistic demo data for 2 full Indian schools
+npm run prisma:seed # or: npx prisma db seed
 ```
 
 ### 4. Run Test Suites
 ```bash
-# Check tenant scoping drift guard (verifies all 21 models)
+# Verify tenant scoping drift guard (all 21 models)
 npm run check:tenant-scoping
 
 # Run 29-point tenant isolation regression suite
@@ -97,10 +116,28 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ---
 
-## 🧪 Verification Commands
+## 🔑 Demo Credentials (Password: `password123` for all)
 
-| Command | Purpose |
-| :--- | :--- |
-| `npm run check:tenant-scoping` | Verifies that all Prisma models with `schoolId` are registered in `TENANT_SCOPED_MODELS` |
-| `npm run test:tenant` | Executes comprehensive isolation test suite (29/29 assertions) |
-| `npm run build` | Full production build and static type verification |
+| Tenant School | Role | Email |
+| :--- | :--- | :--- |
+| **Delhi Public Academy** (CBSE, Delhi) | Admin | `admin@dpa.edu.in` |
+| | Principal | `principal@dpa.edu.in` |
+| | Teacher | `ananya.sharma@dpa.edu.in` |
+| | Teacher | `vikram.malhotra@dpa.edu.in` |
+| | Parent | `parent.sharma@gmail.com` |
+| | Parent | `parent.verma@gmail.com` |
+| | Accountant | `accountant@dpa.edu.in` |
+| **St. Xavier's High School** (ICSE, Mumbai) | Admin | `admin@stxaviers.edu` |
+| | Teacher | `teacher.pereira@stxaviers.edu` |
+| | Parent | `parent.fernandes@gmail.com` |
+| | Accountant | `accountant@stxaviers.edu` |
+
+---
+
+## 🐳 Docker Deployment
+
+To run the entire platform with PostgreSQL using Docker Compose:
+```bash
+docker-compose up --build -d
+```
+Access the application at [http://localhost:3000](http://localhost:3000) and health check at [http://localhost:3000/api/health](http://localhost:3000/api/health).

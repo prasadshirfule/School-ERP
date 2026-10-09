@@ -55,6 +55,29 @@ export async function POST(request: Request) {
   if (!period) return badRequest("Period not found");
   if (period.isBreak) return badRequest("Cannot assign subjects to break periods");
 
+  // Timetable Conflict Detection: ensure teacher is not double-booked on same day + period
+  if (teacherId) {
+    const clash = await ctx.db.timetableSlot.findFirst({
+      where: {
+        teacherId,
+        dayOfWeek,
+        periodId,
+        academicYear,
+        sectionId: { not: sectionId },
+      },
+      include: {
+        section: { include: { class: true } },
+        teacher: true,
+        period: true,
+      },
+    });
+    if (clash) {
+      return badRequest(
+        `Teacher conflict: ${clash.teacher?.fullName || "Selected teacher"} is already assigned to ${clash.section.class.name}-${clash.section.name} on ${dayOfWeek} during ${clash.period.label}.`
+      );
+    }
+  }
+
   const slot = await ctx.db.timetableSlot.upsert({
     where: {
       sectionId_dayOfWeek_periodId_academicYear: {
