@@ -21,6 +21,7 @@ import {
   FileCheck,
   Building2,
   Calendar,
+  UserCheck,
   ClipboardList,
 } from "lucide-react";
 
@@ -34,6 +35,7 @@ const NAV_ITEMS: Record<string, NavItem[]> = {
   ADMIN: [
     { label: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
     { label: "Students", href: "/admin/students", icon: GraduationCap },
+    { label: "Promotion", href: "/admin/promotion", icon: UserCheck },
     { label: "Classes", href: "/admin/classes", icon: School },
     { label: "Teachers", href: "/admin/teachers", icon: Users },
     { label: "Departments", href: "/admin/departments", icon: Building2 },
@@ -48,6 +50,7 @@ const NAV_ITEMS: Record<string, NavItem[]> = {
   PRINCIPAL: [
     { label: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
     { label: "Students", href: "/admin/students", icon: GraduationCap },
+    { label: "Promotion", href: "/admin/promotion", icon: UserCheck },
     { label: "Classes", href: "/admin/classes", icon: School },
     { label: "Teachers", href: "/admin/teachers", icon: Users },
     { label: "Departments", href: "/admin/departments", icon: Building2 },
@@ -70,9 +73,14 @@ const NAV_ITEMS: Record<string, NavItem[]> = {
   ],
   PARENT: [
     { label: "Dashboard", href: "/parent/dashboard", icon: LayoutDashboard },
-    { label: "Assignments", href: "/parent/assignments", icon: ClipboardList },
+    { label: "My Children", href: "/parent/students", icon: GraduationCap },
+    { label: "Attendance", href: "/parent/attendance", icon: CheckCircle2 },
+    { label: "Fees & Invoices", href: "/parent/fees", icon: Receipt },
+    { label: "Report Cards", href: "/parent/report-cards", icon: Award },
     { label: "Timetable", href: "/parent/timetable", icon: CalendarClock },
+    { label: "Assignments", href: "/parent/assignments", icon: ClipboardList },
     { label: "Syllabus", href: "/parent/syllabus", icon: BookOpen },
+    { label: "Notices", href: "/parent/notices", icon: Megaphone },
   ],
   ACCOUNTANT: [
     { label: "Dashboard", href: "/accountant/dashboard", icon: LayoutDashboard },

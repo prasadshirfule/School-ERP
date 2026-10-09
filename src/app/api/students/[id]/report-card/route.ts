@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getRequiredSession, unauthorized } from "@/lib/utils";
-import prisma from "@/lib/prisma";
+import { tenantClient } from "@/lib/tenant";
 import { getOrCreateExamSlots } from "@/lib/exam-slots";
 
 export async function GET(
@@ -13,10 +13,11 @@ export async function GET(
   const { id: studentId } = await params;
   const role = session.user.role;
   const schoolId = session.user.schoolId;
+  const db = tenantClient(schoolId);
 
   // 1. Authorization check
   if (role === "PARENT") {
-    const parent = await prisma.parent.findUnique({
+    const parent = await db.parent.findUnique({
       where: { userId: session.user.id },
       include: { students: true },
     });
@@ -27,10 +28,9 @@ export async function GET(
   }
 
   // 2. Fetch student profile
-  const student = await prisma.student.findFirst({
+  const student = await db.student.findFirst({
     where: {
       id: studentId,
-      schoolId,
     },
     include: {
       section: {
@@ -66,10 +66,10 @@ export async function GET(
   }
 
   // 3. Fetch school's grading scale
-  const rawGradingScale = await prisma.gradingScale.findMany({
-    where: { schoolId },
+  const rawGradingScale = await db.gradingScale.findMany({
     orderBy: { minScore: "desc" },
   });
+
 
   const defaultScale = [
     { id: "scale-1", grade: "A+", minScore: 91, maxScore: 100 },
@@ -104,7 +104,7 @@ export async function GET(
   const t2Slots = examSlots.filter((s) => s.term === "TERM2").sort((a, b) => a.order - b.order);
 
   // 5. Fetch all marks recorded for this student
-  const marks = await prisma.marks.findMany({
+  const marks = await db.marks.findMany({
     where: {
       studentId,
     },
@@ -310,7 +310,7 @@ export async function GET(
   // where attendance was recorded for this student. If a teacher misses
   // marking attendance on a school day, it will not count as a working day,
   // which may yield slightly optimistic attendance percentages.
-  const attendanceRecords = await prisma.attendance.findMany({
+  const attendanceRecords = await db.attendance.findMany({
     where: { studentId },
     orderBy: { date: "asc" },
   });
@@ -348,7 +348,7 @@ export async function GET(
     t2WorkingDays > 0 ? `${((t2PresentDays / t2WorkingDays) * 100).toFixed(1)}%` : "0.0%";
 
   // 7. Remarks
-  const savedReportCard = await prisma.reportCard.findFirst({
+  const savedReportCard = await db.reportCard.findFirst({
     where: { studentId, academicYear: student.academicYear },
   });
 

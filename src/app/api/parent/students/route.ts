@@ -1,15 +1,14 @@
 import { NextResponse } from "next/server";
-import { getRequiredSession, unauthorized } from "@/lib/utils";
-import prisma from "@/lib/prisma";
+import { getTenantDb, unauthorized } from "@/lib/utils";
 
 /** GET: returns students linked to the current parent user */
 export async function GET() {
-  const session = await getRequiredSession();
-  if (!session) return unauthorized();
+  const ctx = await getTenantDb();
+  if (!ctx) return unauthorized();
 
   // Find the parent profile for this user
-  const parent = await prisma.parent.findUnique({
-    where: { userId: session.user.id },
+  const parent = await ctx.db.parent.findUnique({
+    where: { userId: ctx.session.user.id },
     include: {
       students: {
         include: {
@@ -28,7 +27,7 @@ export async function GET() {
   }
 
   // Verify parent belongs to the same school
-  if (parent.schoolId !== session.user.schoolId) {
+  if (parent.schoolId !== ctx.session.user.schoolId) {
     return NextResponse.json([]);
   }
 
