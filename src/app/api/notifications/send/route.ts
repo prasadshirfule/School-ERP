@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getTenantDb, unauthorized } from "@/lib/utils";
 import { notificationDispatcher } from "@/lib/notifications";
+import { checkRateLimit } from "@/lib/rateLimit";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
 
@@ -22,6 +23,15 @@ export async function POST(req: NextRequest) {
       ctx.session.user.role !== "PRINCIPAL"
     ) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    // Rate limit: max 10 broadcast attempts per minute per admin
+    const rateCheck = checkRateLimit(`broadcast:${ctx.session.user.id}`, 10, 60 * 1000);
+    if (!rateCheck.allowed) {
+      return NextResponse.json(
+        { error: "Broadcast rate limit exceeded. Please wait a minute before sending another batch." },
+        { status: 429 }
+      );
     }
 
     const body = await req.json();

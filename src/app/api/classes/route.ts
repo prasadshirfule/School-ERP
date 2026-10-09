@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getTenantDb, unauthorized, badRequest } from "@/lib/utils";
-import prisma from "@/lib/prisma";
+import { ClassCreateSchema } from "@/lib/validations";
 
 export async function GET() {
   const ctx = await getTenantDb();
@@ -30,26 +30,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const body = await request.json();
-  const { name, sections } = body;
-
-  if (!name) {
-    return badRequest("name is required");
+  const body = await request.json().catch(() => ({}));
+  const parsed = ClassCreateSchema.safeParse(body);
+  if (!parsed.success) {
+    return badRequest(parsed.error.issues[0]?.message || "Invalid class data");
   }
 
-  if (!Array.isArray(sections) || sections.length === 0) {
-    return badRequest("At least one section is required");
-  }
-
-  // Validate sections
-  for (const sec of sections) {
-    if (!sec.name || typeof sec.name !== "string" || sec.name.trim() === "") {
-      return badRequest("Each section must have a non-empty name");
-    }
-  }
+  const { name, sections } = parsed.data;
 
   // Check for duplicate section names in the request
-  const sectionNames = sections.map((s: any) => s.name.trim().toUpperCase());
+  const sectionNames = sections.map((s) => s.name.trim().toUpperCase());
   if (new Set(sectionNames).size !== sectionNames.length) {
     return badRequest("Duplicate section names are not allowed");
   }

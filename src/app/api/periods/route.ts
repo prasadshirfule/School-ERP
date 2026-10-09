@@ -1,5 +1,13 @@
 import { NextResponse } from "next/server";
 import { getTenantDb, unauthorized, badRequest } from "@/lib/utils";
+import { z } from "zod";
+
+const PeriodInputSchema = z.object({
+  label: z.string().min(1, "Period label is required").max(50),
+  startTime: z.string().min(1, "Start time is required"),
+  endTime: z.string().min(1, "End time is required"),
+  isBreak: z.boolean().optional(),
+});
 
 /**
  * GET /api/periods
@@ -25,13 +33,12 @@ export async function POST(request: Request) {
   if (!ctx) return unauthorized();
 
   const body = await request.json().catch(() => ({}));
-  const label = typeof body.label === "string" ? body.label.trim() : "";
-  const startTime = typeof body.startTime === "string" ? body.startTime.trim() : "";
-  const endTime = typeof body.endTime === "string" ? body.endTime.trim() : "";
-  const isBreak = body.isBreak === true;
+  const parsed = PeriodInputSchema.safeParse(body);
+  if (!parsed.success) {
+    return badRequest(parsed.error.issues[0]?.message || "Invalid period data");
+  }
 
-  if (!label) return badRequest("Period label is required");
-  if (!startTime || !endTime) return badRequest("Start and end times are required");
+  const { label, startTime, endTime, isBreak } = parsed.data;
 
   // Auto-assign next periodNumber
   const last = await ctx.db.period.findFirst({

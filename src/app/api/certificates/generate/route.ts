@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { getTenantDb, unauthorized, badRequest } from "@/lib/utils";
-import prisma from "@/lib/prisma";
 
 /**
  * POST /api/certificates/generate

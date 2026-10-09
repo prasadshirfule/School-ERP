@@ -1,7 +1,20 @@
 import { NextResponse } from "next/server";
 import { getTenantDb, unauthorized, badRequest } from "@/lib/utils";
-import prisma from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
+import { z } from "zod";
+
+const MarksBatchSaveSchema = z.object({
+  sectionId: z.string().min(1, "Section ID is required"),
+  subjectId: z.string().min(1, "Subject ID is required"),
+  examName: z.string().min(1, "Exam name is required"),
+  records: z.array(
+    z.object({
+      studentId: z.string().min(1),
+      score: z.union([z.number().min(0), z.string()]),
+      maxScore: z.union([z.number().positive(), z.string()]),
+    })
+  ).min(1, "At least one marks record is required"),
+});
 
 /**
  * GET /api/marks
@@ -23,12 +36,12 @@ export async function GET(request: Request) {
 
   // Return distinct exam names for autocomplete
   if (examsOnly) {
-    const studentWhere: any = { schoolId: ctx.session.user.schoolId };
+    const studentWhere: any = {};
     if (sectionId) {
       studentWhere.sectionId = sectionId;
     }
 
-    const marks = await prisma.marks.findMany({
+    const marks = await ctx.db.marks.findMany({
       where: {
         student: studentWhere,
       },
@@ -37,14 +50,14 @@ export async function GET(request: Request) {
       orderBy: { examName: "asc" },
     });
 
-    return NextResponse.json(marks.map((m) => m.examName));
+    return NextResponse.json(marks.map((m: any) => m.examName));
   }
 
   if (!sectionId || !subjectId || !examName) {
     return badRequest("sectionId, subjectId, and examName are required to load marks");
   }
 
-  // 1. Verify section belongs to tenant
+  // 1. Verify section belongs to current tenant
   const section = await ctx.db.section.findUnique({
     where: { id: sectionId },
     include: { class: true },
@@ -53,7 +66,7 @@ export async function GET(request: Request) {
     return badRequest("Section not found");
   }
 
-  // 2. Verify subject belongs to tenant
+  // 2. Verify subject belongs to current tenant
   const subject = await ctx.db.subject.findUnique({
     where: { id: subjectId },
   });
@@ -63,19 +76,26 @@ export async function GET(request: Request) {
 
   // 3. Get all active students in this section
   const students = await ctx.db.student.findMany({
-    where: { sectionId, isActive: true },
-    orderBy: { fullName: "asc" },
+    where: {
+      sectionId,
+      isActive: true,
+    },
+    orderBy: [
+      { rollNumber: "asc" },
+      { fullName: "asc" },
+    ],
     select: {
       id: true,
+      rollNumber: true,
       admissionNo: true,
       fullName: true,
     },
   });
 
-  const studentIds = students.map((s) => s.id);
+  const studentIds = students.map((s: any) => s.id);
 
   // 4. Get existing marks for these students in this subject and exam
-  const existingMarks = await prisma.marks.findMany({
+  const existingMarks = await ctx.db.marks.findMany({
     where: {
       studentId: { in: studentIds },
       subjectId,
@@ -92,32 +112,27 @@ export async function GET(request: Request) {
     });
   }
 
-  const result = students.map((student) => ({
+  const result = students.map((student: any) => ({
     studentId: student.id,
     admissionNo: student.admissionNo,
     fullName: student.fullName,
+    rollNumber: student.rollNumber,
     markId: marksMap.get(student.id)?.id || null,
     score: marksMap.get(student.id)?.score ?? "",
     maxScore: marksMap.get(student.id)?.maxScore ?? "100",
   }));
 
-  return NextResponse.json(result);
+  return NextResponse.json({
+    sectionName: `${section.class.name}-${section.name}`,
+    subjectName: subject.name,
+    examName: examName.trim(),
+    students: result,
+  });
 }
 
 /**
  * POST /api/marks
- * Saves or updates student marks using upsert on @@unique([studentId, subjectId, examName]).
- * Body:
- * {
- *   sectionId: string;
- *   subjectId: string;
- *   examName: string;
- *   records: {
- *     studentId: string;
- *     score: number | string;
- *     maxScore: number | string;
- *   }[];
- * }
+ * Bulk upsert marks for a class section + subject + exam.
  */
 export async function POST(request: Request) {
   const ctx = await getTenantDb();
@@ -128,18 +143,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const body = await request.json();
-  const { sectionId, subjectId, examName, records } = body as {
-    sectionId: string;
-    subjectId: string;
-    examName: string;
-    records: { studentId: string; score: number | string; maxScore: number | string }[];
-  };
-
-  if (!sectionId || !subjectId || !examName?.trim() || !Array.isArray(records) || records.length === 0) {
-    return badRequest("sectionId, subjectId, examName, and records array are required");
+  const json = await request.json().catch(() => ({}));
+  const parsed = MarksBatchSaveSchema.safeParse(json);
+  if (!parsed.success) {
+    return badRequest(parsed.error.issues[0]?.message || "Invalid marks entry data");
   }
 
+  const { sectionId, subjectId, examName, records } = parsed.data;
   const trimmedExamName = examName.trim();
 
   // 1. Verify section belongs to current tenant
@@ -180,83 +190,55 @@ export async function POST(request: Request) {
     }
   }
 
-  // 4. Verify all students belong to this tenant & section
+  // 4. Verify all students belong to this section in current tenant
+  const studentIds = records.map((r) => r.studentId);
   const validStudents = await ctx.db.student.findMany({
     where: {
+      id: { in: studentIds },
       sectionId,
       isActive: true,
     },
     select: { id: true },
   });
+
   const validStudentIdSet = new Set(validStudents.map((s: any) => s.id));
-
-  // Validate values
-  for (const rec of records) {
-    if (!validStudentIdSet.has(rec.studentId)) {
-      return badRequest(`Invalid student ID ${rec.studentId} for the selected section`);
-    }
-
-    const scoreNum = parseFloat(String(rec.score));
-    const maxScoreNum = parseFloat(String(rec.maxScore));
-
-    if (isNaN(scoreNum) || isNaN(maxScoreNum)) {
-      return badRequest("Scores and max scores must be valid numbers");
-    }
-
-    if (scoreNum < 0) {
-      return badRequest(`Score cannot be negative for student ${rec.studentId}`);
-    }
-
-    if (maxScoreNum <= 0) {
-      return badRequest(`Max score must be greater than zero for student ${rec.studentId}`);
-    }
-
-    if (scoreNum > maxScoreNum) {
-      return badRequest(
-        `Score (${scoreNum}) cannot exceed maximum score (${maxScoreNum}) for student ${rec.studentId}`
-      );
-    }
+  const invalidStudents = studentIds.filter((id) => !validStudentIdSet.has(id));
+  if (invalidStudents.length > 0) {
+    return badRequest("One or more students do not belong to the selected section");
   }
 
-  // 5. Execute upserts within a transaction
-  try {
-    const db = ctx.db;
-    const upserted = await (db as any).$transaction(async (tx: any) => {
-      const results = [];
-      for (const rec of records) {
-        const scoreDecimal = new Prisma.Decimal(parseFloat(String(rec.score)).toFixed(2));
-        const maxScoreDecimal = new Prisma.Decimal(parseFloat(String(rec.maxScore)).toFixed(2));
+  // 5. Upsert each mark inside tenant transaction
+  const upsertOps = records.map((rec) => {
+    const scoreDec = new Prisma.Decimal(rec.score);
+    const maxScoreDec = new Prisma.Decimal(rec.maxScore);
 
-        const res = await tx.marks.upsert({
-          where: {
-            studentId_subjectId_examName: {
-              studentId: rec.studentId,
-              subjectId,
-              examName: trimmedExamName,
-            },
-          },
-          create: {
-            studentId: rec.studentId,
-            subjectId,
-            examName: trimmedExamName,
-            score: scoreDecimal,
-            maxScore: maxScoreDecimal,
-          },
-          update: {
-            score: scoreDecimal,
-            maxScore: maxScoreDecimal,
-          },
-        });
-        results.push(res);
-      }
-      return results;
+    return ctx.db.marks.upsert({
+      where: {
+        studentId_subjectId_examName: {
+          studentId: rec.studentId,
+          subjectId,
+          examName: trimmedExamName,
+        },
+      },
+      create: {
+        studentId: rec.studentId,
+        subjectId,
+        examName: trimmedExamName,
+        score: scoreDec,
+        maxScore: maxScoreDec,
+      },
+      update: {
+        score: scoreDec,
+        maxScore: maxScoreDec,
+      },
     });
+  });
 
-    return NextResponse.json({
-      message: `Successfully saved marks for ${upserted.length} student(s) in "${trimmedExamName}"`,
-      count: upserted.length,
-    });
-  } catch (error: any) {
-    return badRequest(error.message || "Failed to save marks");
-  }
+  const results = await (ctx.db as any).$transaction(upsertOps);
+
+  return NextResponse.json({
+    success: true,
+    count: results.length,
+    message: `Successfully saved marks for ${results.length} students.`,
+  });
 }

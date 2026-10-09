@@ -163,3 +163,61 @@ export const SchoolSettingsSchema = z.object({
   term2StartDate: z.string().optional().nullable(),
   term2EndDate: z.string().optional().nullable(),
 });
+
+export const TeacherCreateSchema = z.object({
+  fullName: z.string().min(1, "Full name is required").max(100),
+  email: z.string().email("A valid email address is required"),
+  phone: z.string().optional().nullable(),
+  password: z.string().min(6, "Password must be at least 6 characters long"),
+});
+
+export const SubjectCreateSchema = z.object({
+  name: z.string().min(1, "Subject name is required").max(100),
+});
+
+export const ClassCreateSchema = z.object({
+  name: z.string().min(1, "Class name is required").max(50),
+  sections: z.array(
+    z.object({
+      name: z.string().min(1, "Section name is required").max(10),
+      classTeacherId: z.string().optional().nullable(),
+    })
+  ).min(1, "At least one section is required"),
+});
+
+export const SectionCreateSchema = z.object({
+  name: z.string().min(1, "Section name is required").max(10),
+  classId: z.string().min(1, "Class ID is required"),
+  classTeacherId: z.string().optional().nullable(),
+  academicYear: z.string().optional(),
+});
+
+export const PeriodCreateSchema = z.object({
+  periodNumber: z.number().int().positive("Period number must be positive"),
+  label: z.string().min(1, "Label is required").max(50),
+  startTime: z.string().min(1, "Start time is required"),
+  endTime: z.string().min(1, "End time is required"),
+  isBreak: z.boolean().optional(),
+});
+
+export const DepartmentCreateSchema = z.object({
+  name: z.string().min(1, "Department name is required").max(100),
+  headTeacherId: z.string().optional().nullable(),
+});
+
+export const ExamSlotCreateSchema = z.object({
+  name: z.string().min(1, "Exam slot name is required").max(100),
+  code: z.string().min(1, "Code is required").max(20),
+  term: z.number().int().min(1).max(3),
+  weightage: z.number().min(0).max(100),
+  academicYear: z.string().min(1, "Academic year is required"),
+});
+
+export const SyllabusTopicCreateSchema = z.object({
+  sectionId: z.string().min(1, "Section ID is required"),
+  subjectId: z.string().min(1, "Subject ID is required"),
+  title: z.string().min(1, "Title is required").max(200),
+  description: z.string().optional().nullable(),
+  term: z.number().int().min(1).max(3).optional(),
+});
+

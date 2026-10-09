@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getTenantDb, unauthorized, badRequest } from "@/lib/utils";
+import { SectionCreateSchema } from "@/lib/validations";
 
 export async function GET() {
   const ctx = await getTenantDb();
@@ -29,12 +30,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const body = await request.json();
-  const { classId, name, academicYear, classTeacherId } = body;
-
-  if (!classId || !name || !academicYear) {
-    return badRequest("classId, name, and academicYear are required");
+  const body = await request.json().catch(() => ({}));
+  const parsed = SectionCreateSchema.safeParse(body);
+  if (!parsed.success) {
+    return badRequest(parsed.error.issues[0]?.message || "Invalid section data");
   }
+
+  const { classId, name, academicYear, classTeacherId } = parsed.data;
 
   try {
     const section = await ctx.db.section.create({

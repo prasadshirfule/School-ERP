@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getTenantDb, unauthorized, badRequest } from "@/lib/utils";
 import { razorpayService } from "@/lib/razorpay";
+import { checkRateLimit } from "@/lib/rateLimit";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
 
@@ -13,6 +14,15 @@ export async function POST(req: NextRequest) {
   try {
     const ctx = await getTenantDb();
     if (!ctx) return unauthorized();
+
+    // Rate limit: max 15 payment orders per minute per user
+    const rateCheck = checkRateLimit(`order:${ctx.session.user.id}`, 15, 60 * 1000);
+    if (!rateCheck.allowed) {
+      return NextResponse.json(
+        { error: "Too many payment attempts. Please wait a minute before trying again." },
+        { status: 429 }
+      );
+    }
 
     const body = await req.json();
     const parsed = createOrderSchema.safeParse(body);

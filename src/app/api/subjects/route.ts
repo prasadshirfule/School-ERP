@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getTenantDb, unauthorized, badRequest } from "@/lib/utils";
-import prisma from "@/lib/prisma";
+import { SubjectCreateSchema } from "@/lib/validations";
 
 export async function GET() {
   const ctx = await getTenantDb();
@@ -46,11 +46,12 @@ export async function POST(request: Request) {
   if (!ctx) return unauthorized();
 
   const body = await request.json().catch(() => ({}));
-  const name = typeof body.name === "string" ? body.name.trim() : "";
-
-  if (!name) {
-    return badRequest("Subject name is required");
+  const parsed = SubjectCreateSchema.safeParse(body);
+  if (!parsed.success) {
+    return badRequest(parsed.error.issues[0]?.message || "Invalid subject name");
   }
+
+  const name = parsed.data.name.trim();
 
   // Case-insensitive duplicate check within this school
   const existing = await ctx.db.subject.findFirst({

@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { getTenantDb, unauthorized, badRequest } from "@/lib/utils";
+import { encryptPII, decryptPII, maskAadhaar } from "@/lib/security";
+import { StudentUpdateSchema } from "@/lib/validations";
 
 /**
  * GET /api/students/[id]
@@ -49,7 +51,21 @@ export async function GET(
     return NextResponse.json({ error: "Student not found" }, { status: 404 });
   }
 
-  return NextResponse.json(student);
+  // Handle sensitive PII
+  const role = ctx.session.user.role;
+  const decryptedAadhaar = decryptPII(student.aadharNumber);
+  const decryptedMedical = decryptPII(student.medicalConditions);
+
+  const formattedStudent = {
+    ...student,
+    aadharNumber:
+      role === "ADMIN" || role === "PRINCIPAL"
+        ? decryptedAadhaar
+        : maskAadhaar(decryptedAadhaar),
+    medicalConditions: decryptedMedical,
+  };
+
+  return NextResponse.json(formattedStudent);
 }
 
 /**
@@ -80,71 +96,53 @@ export async function PATCH(
     return NextResponse.json({ error: "Student not found" }, { status: 404 });
   }
 
-  const body = await request.json();
-  const {
-    fullName,
-    rollNumber,
-    dob,
-    gender,
-    bloodGroup,
-    aadharNumber,
-    category,
-    photoUrl,
-    currentAddress,
-    permanentAddress,
-    fatherName,
-    fatherOccupation,
-    fatherPhone,
-    motherName,
-    motherOccupation,
-    motherPhone,
-    guardianName,
-    guardianRelation,
-    guardianPhone,
-    previousSchoolName,
-    previousClass,
-    transferCertificateNumber,
-    emergencyContactName,
-    emergencyContactPhone,
-    medicalConditions,
-    classDesignation,
-  } = body;
+  const body = await request.json().catch(() => ({}));
+  const parsed = StudentUpdateSchema.safeParse(body);
+  if (!parsed.success) {
+    return badRequest(parsed.error.issues[0]?.message || "Invalid student data");
+  }
 
+  const data = parsed.data;
   const updateData: any = {};
 
-  if (typeof fullName === "string" && fullName.trim()) {
-    updateData.fullName = fullName.trim();
-  }
-  if (dob) {
-    const dobDate = new Date(dob);
+  if (data.fullName !== undefined) updateData.fullName = data.fullName.trim();
+  if (data.dob) {
+    const dobDate = new Date(data.dob);
     if (!isNaN(dobDate.getTime())) {
       updateData.dob = dobDate;
     }
   }
-  if (rollNumber !== undefined) updateData.rollNumber = rollNumber ? String(rollNumber).trim() : null;
-  if (gender !== undefined) updateData.gender = gender ? String(gender).trim() : null;
-  if (bloodGroup !== undefined) updateData.bloodGroup = bloodGroup ? String(bloodGroup).trim() : null;
-  if (aadharNumber !== undefined) updateData.aadharNumber = aadharNumber ? String(aadharNumber).trim() : null;
-  if (category !== undefined) updateData.category = category ? String(category).trim() : null;
-  if (photoUrl !== undefined) updateData.photoUrl = photoUrl ? String(photoUrl).trim() : null;
-  if (currentAddress !== undefined) updateData.currentAddress = currentAddress ? String(currentAddress).trim() : null;
-  if (permanentAddress !== undefined) updateData.permanentAddress = permanentAddress ? String(permanentAddress).trim() : null;
-  if (fatherName !== undefined) updateData.fatherName = fatherName ? String(fatherName).trim() : null;
-  if (fatherOccupation !== undefined) updateData.fatherOccupation = fatherOccupation ? String(fatherOccupation).trim() : null;
-  if (fatherPhone !== undefined) updateData.fatherPhone = fatherPhone ? String(fatherPhone).trim() : null;
-  if (motherName !== undefined) updateData.motherName = motherName ? String(motherName).trim() : null;
-  if (motherOccupation !== undefined) updateData.motherOccupation = motherOccupation ? String(motherOccupation).trim() : null;
-  if (motherPhone !== undefined) updateData.motherPhone = motherPhone ? String(motherPhone).trim() : null;
-  if (guardianName !== undefined) updateData.guardianName = guardianName ? String(guardianName).trim() : null;
-  if (guardianRelation !== undefined) updateData.guardianRelation = guardianRelation ? String(guardianRelation).trim() : null;
-  if (guardianPhone !== undefined) updateData.guardianPhone = guardianPhone ? String(guardianPhone).trim() : null;
-  if (previousSchoolName !== undefined) updateData.previousSchoolName = previousSchoolName ? String(previousSchoolName).trim() : null;
-  if (previousClass !== undefined) updateData.previousClass = previousClass ? String(previousClass).trim() : null;
-  if (transferCertificateNumber !== undefined) updateData.transferCertificateNumber = transferCertificateNumber ? String(transferCertificateNumber).trim() : null;
-  if (emergencyContactName !== undefined) updateData.emergencyContactName = emergencyContactName ? String(emergencyContactName).trim() : null;
-  if (emergencyContactPhone !== undefined) updateData.emergencyContactPhone = emergencyContactPhone ? String(emergencyContactPhone).trim() : null;
-  if (medicalConditions !== undefined) updateData.medicalConditions = medicalConditions ? String(medicalConditions).trim() : null;
-  if (classDesignation !== undefined) updateData.classDesignation = classDesignation ? String(classDesignation).trim() : null;
+  if (data.rollNumber !== undefined) updateData.rollNumber = data.rollNumber ? String(data.rollNumber).trim() : null;
+  if (data.sectionId !== undefined) updateData.sectionId = data.sectionId || null;
+  if (data.academicYear !== undefined) updateData.academicYear = data.academicYear;
+  if (data.gender !== undefined) updateData.gender = data.gender ? String(data.gender).trim() : null;
+  if (data.bloodGroup !== undefined) updateData.bloodGroup = data.bloodGroup ? String(data.bloodGroup).trim() : null;
+  if (data.aadharNumber !== undefined) {
+    updateData.aadharNumber = data.aadharNumber ? encryptPII(String(data.aadharNumber).trim()) : null;
+  }
+  if (data.category !== undefined) updateData.category = data.category ? String(data.category).trim() : null;
+  if (data.photoUrl !== undefined) updateData.photoUrl = data.photoUrl ? String(data.photoUrl).trim() : null;
+  if (data.currentAddress !== undefined) updateData.currentAddress = data.currentAddress ? String(data.currentAddress).trim() : null;
+  if (data.permanentAddress !== undefined) updateData.permanentAddress = data.permanentAddress ? String(data.permanentAddress).trim() : null;
+  if (data.fatherName !== undefined) updateData.fatherName = data.fatherName ? String(data.fatherName).trim() : null;
+  if (data.fatherOccupation !== undefined) updateData.fatherOccupation = data.fatherOccupation ? String(data.fatherOccupation).trim() : null;
+  if (data.fatherPhone !== undefined) updateData.fatherPhone = data.fatherPhone ? String(data.fatherPhone).trim() : null;
+  if (data.motherName !== undefined) updateData.motherName = data.motherName ? String(data.motherName).trim() : null;
+  if (data.motherOccupation !== undefined) updateData.motherOccupation = data.motherOccupation ? String(data.motherOccupation).trim() : null;
+  if (data.motherPhone !== undefined) updateData.motherPhone = data.motherPhone ? String(data.motherPhone).trim() : null;
+  if (data.guardianName !== undefined) updateData.guardianName = data.guardianName ? String(data.guardianName).trim() : null;
+  if (data.guardianRelation !== undefined) updateData.guardianRelation = data.guardianRelation ? String(data.guardianRelation).trim() : null;
+  if (data.guardianPhone !== undefined) updateData.guardianPhone = data.guardianPhone ? String(data.guardianPhone).trim() : null;
+  if (data.previousSchoolName !== undefined) updateData.previousSchoolName = data.previousSchoolName ? String(data.previousSchoolName).trim() : null;
+  if (data.previousClass !== undefined) updateData.previousClass = data.previousClass ? String(data.previousClass).trim() : null;
+  if (data.transferCertificateNumber !== undefined) updateData.transferCertificateNumber = data.transferCertificateNumber ? String(data.transferCertificateNumber).trim() : null;
+  if (data.emergencyContactName !== undefined) updateData.emergencyContactName = data.emergencyContactName ? String(data.emergencyContactName).trim() : null;
+  if (data.emergencyContactPhone !== undefined) updateData.emergencyContactPhone = data.emergencyContactPhone ? String(data.emergencyContactPhone).trim() : null;
+  if (data.medicalConditions !== undefined) {
+    updateData.medicalConditions = data.medicalConditions ? encryptPII(String(data.medicalConditions).trim()) : null;
+  }
+  if (data.classDesignation !== undefined) updateData.classDesignation = data.classDesignation ? String(data.classDesignation).trim() : null;
+  if (data.isActive !== undefined) updateData.isActive = data.isActive;
 
   const updated = await ctx.db.student.update({
     where: { id },
@@ -176,6 +174,12 @@ export async function PATCH(
     },
   });
 
-  return NextResponse.json(updated);
-}
+  const decryptedAadhaar = decryptPII(updated.aadharNumber);
+  const decryptedMedical = decryptPII(updated.medicalConditions);
 
+  return NextResponse.json({
+    ...updated,
+    aadharNumber: decryptedAadhaar,
+    medicalConditions: decryptedMedical,
+  });
+}

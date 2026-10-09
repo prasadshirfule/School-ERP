@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getTenantDb, unauthorized, badRequest } from "@/lib/utils";
+import { DepartmentCreateSchema } from "@/lib/validations";
 
 /**
  * GET /api/departments
@@ -37,12 +38,13 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json().catch(() => ({}));
-  const name = typeof body.name === "string" ? body.name.trim() : "";
-  const headOfDepartmentId = typeof body.headOfDepartmentId === "string" && body.headOfDepartmentId.trim()
-    ? body.headOfDepartmentId.trim()
-    : null;
+  const parsed = DepartmentCreateSchema.safeParse(body);
+  if (!parsed.success) {
+    return badRequest(parsed.error.issues[0]?.message || "Invalid department data");
+  }
 
-  if (!name) return badRequest("Department name is required");
+  const name = parsed.data.name.trim();
+  const headOfDepartmentId = parsed.data.headTeacherId || (body.headOfDepartmentId ? String(body.headOfDepartmentId).trim() : null);
 
   // Check unique name per school
   const existing = await ctx.db.department.findFirst({

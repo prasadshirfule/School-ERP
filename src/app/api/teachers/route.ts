@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getTenantDb, unauthorized, badRequest } from "@/lib/utils";
-import prisma from "@/lib/prisma";
+import { TeacherCreateSchema } from "@/lib/validations";
 import bcrypt from "bcryptjs";
 
 /**
@@ -83,19 +83,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const body = await request.json();
-  const { fullName, email, phone, password } = body;
-
-  if (!fullName || typeof fullName !== "string" || fullName.trim() === "") {
-    return badRequest("fullName is required");
-  }
-  if (!email || typeof email !== "string" || !email.includes("@")) {
-    return badRequest("A valid email address is required");
-  }
-  if (!password || typeof password !== "string" || password.length < 6) {
-    return badRequest("Password must be at least 6 characters long");
+  const body = await request.json().catch(() => ({}));
+  const parsed = TeacherCreateSchema.safeParse(body);
+  if (!parsed.success) {
+    return badRequest(parsed.error.issues[0]?.message || "Invalid teacher data");
   }
 
+  const { fullName, email, phone, password } = parsed.data;
   const normalizedEmail = email.trim().toLowerCase();
   const schoolId = ctx.session.user.schoolId;
 

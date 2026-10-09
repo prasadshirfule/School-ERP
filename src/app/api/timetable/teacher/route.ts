@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { getTenantDb, unauthorized } from "@/lib/utils";
-import prisma from "@/lib/prisma";
 
 /**
  * GET /api/timetable/teacher
