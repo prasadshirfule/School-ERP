@@ -137,6 +137,33 @@ async function main() {
     },
   });
 
+  // Greenfield Admin & Teacher alias for test compatibility
+  await prisma.user.create({
+    data: {
+      schoolId: schoolA.id,
+      email: "admin@greenfield.edu",
+      role: Role.ADMIN,
+      passwordHash,
+      phone: "+91 98111 22330",
+    },
+  });
+
+  const teacherGreenfield = await prisma.user.create({
+    data: {
+      schoolId: schoolA.id,
+      email: "teacher1@greenfield.edu",
+      role: Role.TEACHER,
+      passwordHash,
+      phone: "+91 98111 55000",
+    },
+  });
+  await prisma.teacher.create({
+    data: {
+      userId: teacherGreenfield.id,
+      fullName: "Mr. Greenfield Teacher",
+    },
+  });
+
   const principalUserA = await prisma.user.create({
     data: {
       schoolId: schoolA.id,
@@ -807,6 +834,17 @@ async function main() {
       role: Role.ADMIN,
       passwordHash,
       phone: "+91 98200 11223",
+    },
+  });
+
+  // Oakridge Admin alias for test compatibility
+  await prisma.user.create({
+    data: {
+      schoolId: schoolB.id,
+      email: "admin@oakridge.edu",
+      role: Role.ADMIN,
+      passwordHash,
+      phone: "+91 98200 11220",
     },
   });
 

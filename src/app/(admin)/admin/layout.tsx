@@ -1,12 +1,5 @@
-import Sidebar from "@/components/sidebar";
-import Topbar from "@/components/topbar";
+import AppShell from "@/components/AppShell";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <>
-      <Sidebar />
-      <Topbar />
-      <main className="main-content">{children}</main>
-    </>
-  );
+  return <AppShell>{children}</AppShell>;
 }

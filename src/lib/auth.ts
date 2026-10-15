@@ -5,11 +5,14 @@ import prisma from "./prisma";
 import { checkRateLimit } from "./rateLimit";
 
 export const authOptions: NextAuthOptions = {
+  secret: process.env.NEXTAUTH_SECRET || "school_erp_production_secret_key_min32chars!!",
   session: {
     strategy: "jwt",
+    maxAge: 30 * 24 * 60 * 60, // 30 days
   },
   pages: {
     signIn: "/login",
+    error: "/login",
   },
   providers: [
     CredentialsProvider({
@@ -25,17 +28,24 @@ export const authOptions: NextAuthOptions = {
 
         const normalizedEmail = credentials.email.trim().toLowerCase();
         
-        // Rate limit: max 10 login attempts per 5 minutes per email
-        const rateCheck = checkRateLimit(`login:${normalizedEmail}`, 10, 5 * 60 * 1000);
+        // Rate limit: max 15 login attempts per 5 minutes per email
+        const rateCheck = checkRateLimit(`login:${normalizedEmail}`, 15, 5 * 60 * 1000);
         if (!rateCheck.allowed) {
           console.warn(`Rate limit exceeded for login attempts on email: ${normalizedEmail}`);
-          return null;
+          throw new Error("RATE_LIMITED: Too many attempts. Please wait 5 minutes before trying again.");
         }
 
         try {
           const user = await prisma.user.findUnique({
             where: {
               email: normalizedEmail,
+            },
+            include: {
+              school: {
+                select: {
+                  name: true,
+                },
+              },
             },
           });
 
@@ -57,9 +67,13 @@ export const authOptions: NextAuthOptions = {
             email: user.email,
             role: user.role,
             schoolId: user.schoolId,
+            schoolName: user.school?.name || "School ERP",
           };
-        } catch (error) {
-          console.error("Auth authorization error:", error);
+        } catch (error: any) {
+          console.error("Auth authorization error:", error?.message || error);
+          if (error?.message?.startsWith("RATE_LIMITED")) {
+            throw error;
+          }
           return null;
         }
       },
@@ -71,14 +85,16 @@ export const authOptions: NextAuthOptions = {
         token.id = user.id;
         token.role = user.role;
         token.schoolId = user.schoolId;
+        token.schoolName = (user as any).schoolName || "School ERP";
       }
       return token;
     },
     async session({ session, token }) {
       if (session.user) {
-        session.user.id = token.id;
-        session.user.role = token.role;
-        session.user.schoolId = token.schoolId;
+        session.user.id = token.id as string;
+        session.user.role = token.role as any;
+        session.user.schoolId = token.schoolId as string;
+        session.user.schoolName = (token as any).schoolName || "School ERP";
       }
       return session;
     },

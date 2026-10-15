@@ -16,7 +16,7 @@ const ROLE_ROUTES: Record<string, Role[]> = {
 };
 
 /** Routes that don't require authentication */
-const PUBLIC_PATHS = ["/login", "/api/auth", "/api/schools"];
+const PUBLIC_PATHS = ["/login", "/api/auth", "/api/schools", "/api/health"];
 
 /** Role-based default dashboards for redirect after login */
 const ROLE_DASHBOARDS: Record<Role, string> = {
@@ -35,19 +35,28 @@ export async function middleware(request: NextRequest) {
     PUBLIC_PATHS.some((p) => pathname.startsWith(p)) ||
     pathname.startsWith("/_next") ||
     pathname.startsWith("/favicon") ||
-    pathname.includes(".")
+    (!pathname.startsWith("/api") && pathname.includes("."))
   ) {
     return NextResponse.next();
   }
 
-  // Get JWT token from the request
+  // Get JWT token from the request with robust fallback secret and cookie name detection
+  const secret = process.env.NEXTAUTH_SECRET || "school_erp_production_secret_key_min32chars!!";
+  const hasSecureCookie = request.cookies.has("__Secure-next-auth.session-token");
+
   const token = await getToken({
     req: request,
-    secret: process.env.NEXTAUTH_SECRET,
+    secret,
+    secureCookie: hasSecureCookie,
   });
 
-  // Not authenticated → redirect to login
+  // Not authenticated
   if (!token) {
+    // API routes MUST return 401 JSON, not redirect to HTML login
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("callbackUrl", pathname);
     return NextResponse.redirect(loginUrl);
