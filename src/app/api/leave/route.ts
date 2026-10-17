@@ -1,18 +1,23 @@
 import { NextResponse } from "next/server";
-import { getTenantDb, unauthorized, badRequest } from "@/lib/utils";
+import { getTenantDb, unauthorized, badRequest, forbidden, hasRole } from "@/lib/utils";
 
 /**
  * GET /api/leave
  * - For TEACHER / ACCOUNTANT: Returns their own leave requests.
  * - For ADMIN / PRINCIPAL: Returns all school leave requests (optional ?status= filter).
+ * - For PARENT: Forbidden (no staff leave access).
  */
 export async function GET(request: Request) {
   const ctx = await getTenantDb();
   if (!ctx) return unauthorized();
 
+  const role = ctx.session.user.role;
+  if (role === "PARENT") {
+    return forbidden("Parents cannot access staff leave records");
+  }
+
   const { searchParams } = new URL(request.url);
   const status = searchParams.get("status") || "";
-  const role = ctx.session.user.role;
   const isStaff = role === "TEACHER" || role === "ACCOUNTANT";
 
   const whereClause: any = {};
@@ -51,6 +56,9 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const ctx = await getTenantDb();
   if (!ctx) return unauthorized();
+  if (ctx.session.user.role === "PARENT") {
+    return forbidden("Parents cannot submit staff leave requests");
+  }
 
   const body = await request.json().catch(() => ({}));
   const leaveType = typeof body.leaveType === "string" ? body.leaveType.trim() : "Casual";
@@ -101,10 +109,7 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
   const ctx = await getTenantDb();
   if (!ctx) return unauthorized();
-
-  if (ctx.session.user.role !== "ADMIN" && ctx.session.user.role !== "PRINCIPAL") {
-    return unauthorized();
-  }
+  if (!hasRole(ctx.session, ["ADMIN", "PRINCIPAL"])) return forbidden();
 
   const body = await request.json().catch(() => ({}));
   const id = typeof body.id === "string" ? body.id.trim() : "";

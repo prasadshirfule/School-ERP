@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { getRequiredSession, unauthorized, badRequest } from "@/lib/utils";
-import { storage } from "@/lib/storage";
+import { getRequiredSession, unauthorized, badRequest, forbidden, hasRole } from "@/lib/utils";
+import { storage, validateFileMagicBytes } from "@/lib/storage";
 import path from "path";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
@@ -24,12 +24,8 @@ export async function POST(request: Request) {
   const session = await getRequiredSession();
   if (!session) return unauthorized();
 
-  if (
-    session.user.role !== "ADMIN" &&
-    session.user.role !== "PRINCIPAL" &&
-    session.user.role !== "TEACHER"
-  ) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!hasRole(session, ["ADMIN", "PRINCIPAL", "TEACHER"])) {
+    return forbidden();
   }
 
   try {
@@ -60,11 +56,17 @@ export async function POST(request: Request) {
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
+    // Validate signature for document types
+    if (!validateFileMagicBytes(buffer, "document")) {
+      return badRequest("File content does not match a valid document format signature.");
+    }
+
     const result = await storage.upload({
       buffer,
       filename: file.name || "attachment.pdf",
       folder: "assignments",
       contentType: file.type,
+      schoolId: session.user.schoolId,
     });
 
     return NextResponse.json({

@@ -2,75 +2,89 @@
  * Schema-drift guard for tenant scoping.
  *
  * Uses Prisma's DMMF (Data Model Meta Format) to introspect every model
- * in the schema. If any model has a `schoolId` field but is NOT in the
- * TENANT_SCOPED_MODELS set in lib/tenant.ts, this script exits with
- * code 1 — failing CI and blocking `npm run dev` via the `predev` hook.
+ * in the schema.
+ * 1. Verifies that every model with a scalar `schoolId` field is in TENANT_SCOPED_MODELS.
+ * 2. Verifies that all relational models (Teacher, Marks, StudentParent, TeacherSubject)
+ *    are in RELATIONALLY_SCOPED_MODELS.
+ * 3. Verifies that 100% of datamodel models are accounted for (zero un-scoped leakage).
  *
  * Run: npx ts-node scripts/check-tenant-scoping.ts
  */
 
 import { Prisma } from "@prisma/client";
-import { TENANT_SCOPED_MODELS } from "../src/lib/tenant";
+import { TENANT_SCOPED_MODELS, RELATIONALLY_SCOPED_MODELS, ALL_SCOPED_MODELS } from "../src/lib/tenant";
 
 function main() {
   const models = Prisma.dmmf.datamodel.models;
-  const missing: string[] = [];
+  const missingDirect: string[] = [];
+  const unaccounted: string[] = [];
 
   for (const model of models) {
+    if (model.name === "School") continue; // Tenant root
+
     const hasSchoolId = model.fields.some(
       (f: { name: string; kind: string }) => f.name === "schoolId" && f.kind === "scalar"
     );
 
-    if (hasSchoolId && model.name !== "School" && !TENANT_SCOPED_MODELS.has(model.name)) {
-      missing.push(model.name);
+    if (hasSchoolId && !TENANT_SCOPED_MODELS.has(model.name)) {
+      missingDirect.push(model.name);
+    }
+
+    if (!ALL_SCOPED_MODELS.has(model.name)) {
+      unaccounted.push(model.name);
     }
   }
 
-  if (missing.length > 0) {
+  if (missingDirect.length > 0) {
     console.error(
       "\n❌ TENANT SCOPING DRIFT DETECTED!\n" +
         "The following models have a `schoolId` field but are NOT listed\n" +
         "in TENANT_SCOPED_MODELS (src/lib/tenant.ts):\n\n" +
-        missing.map((m: string) => `  • ${m}`).join("\n") +
-        "\n\n" +
-        "Every model with schoolId MUST be added to TENANT_SCOPED_MODELS,\n" +
-        "otherwise queries on that model will bypass tenant isolation.\n"
+        missingDirect.map((m: string) => `  • ${m}`).join("\n") +
+        "\n\n"
     );
     process.exit(1);
   }
 
-  // Also check the reverse: models in the set that DON'T have schoolId
-  const schemaModelNames = new Set(models.map((m: { name: string }) => m.name));
-  const phantom: string[] = [];
+  if (unaccounted.length > 0) {
+    console.error(
+      "\n❌ UNPROTECTED MODEL DETECTED!\n" +
+        "The following models are NOT scoped by either direct schoolId or relational tenant scoping:\n\n" +
+        unaccounted.map((m: string) => `  • ${m}`).join("\n") +
+        "\n\n" +
+        "Every model in the schema must be in TENANT_SCOPED_MODELS or RELATIONALLY_SCOPED_MODELS.\n"
+    );
+    process.exit(1);
+  }
 
+  // Also check reverse: models in direct set that don't have scalar schoolId
+  const phantomDirect: string[] = [];
   for (const name of TENANT_SCOPED_MODELS) {
     const model = models.find((m: { name: string }) => m.name === name);
     if (!model) {
-      phantom.push(`${name} (not found in schema)`);
+      phantomDirect.push(`${name} (not found in schema)`);
     } else {
       const hasSchoolId = model.fields.some(
         (f: { name: string; kind: string }) => f.name === "schoolId" && f.kind === "scalar"
       );
       if (!hasSchoolId) {
-        phantom.push(`${name} (no schoolId field)`);
+        phantomDirect.push(`${name} (no scalar schoolId field)`);
       }
     }
   }
 
-  if (phantom.length > 0) {
+  if (phantomDirect.length > 0) {
     console.error(
       "\n❌ TENANT SCOPING MISMATCH!\n" +
-        "The following entries in TENANT_SCOPED_MODELS don't match\n" +
-        "any model with a schoolId field in the schema:\n\n" +
-        phantom.map((m) => `  • ${m}`).join("\n") +
-        "\n\n" +
-        "Remove or fix these entries in src/lib/tenant.ts.\n"
+        "The following entries in TENANT_SCOPED_MODELS don't have a scalar schoolId field:\n\n" +
+        phantomDirect.map((m) => `  • ${m}`).join("\n") +
+        "\n"
     );
     process.exit(1);
   }
 
   console.log(
-    `✅ Tenant scoping check passed — ${TENANT_SCOPED_MODELS.size} models verified.`
+    `✅ Complete tenant scoping verified — ${TENANT_SCOPED_MODELS.size} direct models + ${RELATIONALLY_SCOPED_MODELS.size} relational models (100% schema models protected).`
   );
 }
 

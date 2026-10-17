@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getTenantDb, unauthorized, badRequest } from "@/lib/utils";
+import { getTenantDb, unauthorized, badRequest, forbidden, hasRole } from "@/lib/utils";
 import { z } from "zod";
 
 const PeriodInputSchema = z.object({
@@ -31,6 +31,7 @@ export async function GET() {
 export async function POST(request: Request) {
   const ctx = await getTenantDb();
   if (!ctx) return unauthorized();
+  if (!hasRole(ctx.session, ["ADMIN", "PRINCIPAL"])) return forbidden();
 
   const body = await request.json().catch(() => ({}));
   const parsed = PeriodInputSchema.safeParse(body);
@@ -66,6 +67,7 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
   const ctx = await getTenantDb();
   if (!ctx) return unauthorized();
+  if (!hasRole(ctx.session, ["ADMIN", "PRINCIPAL"])) return forbidden();
 
   const body = await request.json().catch(() => ({}));
   const id = typeof body.id === "string" ? body.id.trim() : "";
@@ -95,6 +97,7 @@ export async function PATCH(request: Request) {
 export async function DELETE(request: Request) {
   const ctx = await getTenantDb();
   if (!ctx) return unauthorized();
+  if (!hasRole(ctx.session, ["ADMIN", "PRINCIPAL"])) return forbidden();
 
   const { searchParams } = new URL(request.url);
   const id = searchParams.get("id") || "";

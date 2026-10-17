@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getTenantDb, unauthorized, badRequest } from "@/lib/utils";
+import { getTenantDb, unauthorized, badRequest, forbidden, hasRole } from "@/lib/utils";
 import { SubjectCreateSchema } from "@/lib/validations";
 
 export async function GET() {
@@ -44,6 +44,7 @@ export async function GET() {
 export async function POST(request: Request) {
   const ctx = await getTenantDb();
   if (!ctx) return unauthorized();
+  if (!hasRole(ctx.session, ["ADMIN", "PRINCIPAL", "TEACHER"])) return forbidden();
 
   const body = await request.json().catch(() => ({}));
   const parsed = SubjectCreateSchema.safeParse(body);
@@ -104,6 +105,7 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
   const ctx = await getTenantDb();
   if (!ctx) return unauthorized();
+  if (!hasRole(ctx.session, ["ADMIN", "PRINCIPAL", "TEACHER"])) return forbidden();
 
   const body = await request.json().catch(() => ({}));
   const id = typeof body.id === "string" ? body.id.trim() : "";
@@ -123,6 +125,22 @@ export async function PATCH(request: Request) {
   });
   if (!current) {
     return badRequest("Subject not found");
+  }
+
+  if (ctx.session.user.role === "TEACHER") {
+    const teacher = await ctx.db.teacher.findUnique({
+      where: { userId: ctx.session.user.id },
+    });
+    if (!teacher) return forbidden();
+    const assigned = await ctx.db.teacherSubject.findUnique({
+      where: {
+        teacherId_subjectId: {
+          teacherId: teacher.id,
+          subjectId: id,
+        },
+      },
+    });
+    if (!assigned) return forbidden("You are not assigned to teach this subject");
   }
 
   // Case-insensitive duplicate check within this school, excluding self

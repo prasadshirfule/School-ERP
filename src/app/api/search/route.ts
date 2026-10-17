@@ -16,6 +16,48 @@ export async function GET(request: Request) {
     return NextResponse.json({ students: [], teachers: [], classes: [], invoices: [] });
   }
 
+  const role = ctx.session.user.role;
+
+  // PARENT role: only search their own children, no access to invoices, classes, or staff
+  if (role === "PARENT") {
+    const parent = await ctx.db.parent.findUnique({
+      where: { userId: ctx.session.user.id },
+      include: { students: { select: { studentId: true } } },
+    });
+    const childIds = parent?.students.map((c: any) => c.studentId) || [];
+
+    const students = await ctx.db.student.findMany({
+      where: {
+        id: { in: childIds },
+        OR: [
+          { fullName: { contains: q, mode: "insensitive" } },
+          { admissionNo: { contains: q, mode: "insensitive" } },
+          { rollNumber: { contains: q, mode: "insensitive" } },
+        ],
+      },
+      include: {
+        section: { include: { class: true } },
+      },
+      take: 6,
+    });
+
+    return NextResponse.json({
+      students: students.map((s: any) => ({
+        id: s.id,
+        title: s.fullName,
+        subtitle: `${s.section ? `${s.section.class.name}-${s.section.name}` : "Unassigned"} • Adm: ${s.admissionNo}`,
+        href: `/parent/children`,
+        type: "Child",
+      })),
+      teachers: [],
+      classes: [],
+      invoices: [],
+    });
+  }
+
+  // Staff roles (ADMIN, PRINCIPAL, TEACHER, ACCOUNTANT)
+  const canViewFinancials = role === "ADMIN" || role === "PRINCIPAL" || role === "ACCOUNTANT";
+
   const [students, teachers, classes, invoices] = await Promise.all([
     ctx.db.student.findMany({
       where: {
@@ -52,19 +94,21 @@ export async function GET(request: Request) {
       },
       take: 4,
     }),
-    ctx.db.feeInvoice.findMany({
-      where: {
-        OR: [
-          { student: { fullName: { contains: q, mode: "insensitive" } } },
-          { student: { admissionNo: { contains: q, mode: "insensitive" } } },
-        ],
-      },
-      include: {
-        student: { select: { fullName: true, admissionNo: true } },
-        feeStructure: { select: { name: true } },
-      },
-      take: 5,
-    }),
+    canViewFinancials
+      ? ctx.db.feeInvoice.findMany({
+          where: {
+            OR: [
+              { student: { fullName: { contains: q, mode: "insensitive" } } },
+              { student: { admissionNo: { contains: q, mode: "insensitive" } } },
+            ],
+          },
+          include: {
+            student: { select: { fullName: true, admissionNo: true } },
+            feeStructure: { select: { name: true } },
+          },
+          take: 5,
+        })
+      : Promise.resolve([]),
   ]);
 
   return NextResponse.json({

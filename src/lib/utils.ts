@@ -2,7 +2,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "./auth";
 import { tenantClient } from "./tenant";
 import { NextResponse } from "next/server";
-import { Prisma } from "@prisma/client";
+import { Prisma, Role } from "@prisma/client";
 
 /**
  * Get the current session or return a 401 response.
@@ -18,7 +18,7 @@ export async function getRequiredSession() {
 
 /**
  * Get a tenant-scoped Prisma client from the current session.
- * Returns [db, session] or throws 401.
+ * Returns { db, session } or null.
  */
 export async function getTenantDb() {
   const session = await getRequiredSession();
@@ -32,6 +32,13 @@ export async function getTenantDb() {
 }
 
 /**
+ * Check if the authenticated session has one of the required roles.
+ */
+export function hasRole(session: { user: { role: Role } }, allowedRoles: Role[]): boolean {
+  return allowedRoles.includes(session.user.role);
+}
+
+/**
  * Standard 401 Unauthorized response
  */
 export function unauthorized() {
@@ -41,8 +48,15 @@ export function unauthorized() {
 /**
  * Standard 403 Forbidden response
  */
-export function forbidden() {
-  return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+export function forbidden(message: string = "Forbidden") {
+  return NextResponse.json({ error: message }, { status: 403 });
+}
+
+/**
+ * Standard 404 Not Found response
+ */
+export function notFound(message: string = "Not found") {
+  return NextResponse.json({ error: message }, { status: 404 });
 }
 
 /**

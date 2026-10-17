@@ -1,18 +1,39 @@
 import { NextResponse } from "next/server";
-import { getTenantDb, unauthorized, badRequest } from "@/lib/utils";
+import { getTenantDb, unauthorized, badRequest, forbidden, hasRole } from "@/lib/utils";
 import { Prisma } from "@prisma/client";
 
 export async function GET(request: Request) {
   const ctx = await getTenantDb();
   if (!ctx) return unauthorized();
 
+  const role = ctx.session.user.role;
   const { searchParams } = new URL(request.url);
   const status = searchParams.get("status");
   const studentId = searchParams.get("studentId");
 
   const where: any = {};
   if (status) where.status = status;
-  if (studentId) where.studentId = studentId;
+
+  if (role === "PARENT") {
+    const parent = await ctx.db.parent.findUnique({
+      where: { userId: ctx.session.user.id },
+      include: { students: { select: { studentId: true } } },
+    });
+    const childIds = parent?.students.map((c: any) => c.studentId) || [];
+
+    if (studentId) {
+      if (!childIds.includes(studentId)) {
+        return forbidden("You can only view invoices for your linked children");
+      }
+      where.studentId = studentId;
+    } else {
+      where.studentId = { in: childIds };
+    }
+  } else if (role === "TEACHER") {
+    return forbidden("Teachers cannot access fee invoices");
+  } else if (studentId) {
+    where.studentId = studentId;
+  }
 
   const invoices = await ctx.db.feeInvoice.findMany({
     where,
@@ -46,12 +67,8 @@ export async function POST(request: Request) {
   const ctx = await getTenantDb();
   if (!ctx) return unauthorized();
 
-  if (
-    ctx.session.user.role !== "ACCOUNTANT" &&
-    ctx.session.user.role !== "ADMIN" &&
-    ctx.session.user.role !== "PRINCIPAL"
-  ) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!hasRole(ctx.session, ["ADMIN", "PRINCIPAL", "ACCOUNTANT"])) {
+    return forbidden();
   }
 
   const body = await request.json();
@@ -59,6 +76,14 @@ export async function POST(request: Request) {
 
   if (!studentId || !feeStructureId || !dueDate) {
     return badRequest("studentId, feeStructureId, and dueDate are required");
+  }
+
+  // Verify student belongs to this school
+  const student = await ctx.db.student.findUnique({
+    where: { id: studentId },
+  });
+  if (!student) {
+    return badRequest("Student not found in this school");
   }
 
   // Fetch fee structure to get amount — using Decimal arithmetic

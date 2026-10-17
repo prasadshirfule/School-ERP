@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { Search, GraduationCap, Users, School, Receipt, ArrowRight, X } from "lucide-react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 interface SearchResultItem {
@@ -31,15 +30,27 @@ export default function GlobalSearch() {
   const [loading, setLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const handleClose = () => {
+    setIsOpen(false);
+    setQuery("");
+    setResults({ students: [], teachers: [], classes: [], invoices: [] });
+  };
+
   // Keyboard shortcut Ctrl+K / Cmd+K
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
         e.preventDefault();
-        setIsOpen((prev) => !prev);
+        setIsOpen((prev) => {
+          if (prev) {
+            setQuery("");
+            setResults({ students: [], teachers: [], classes: [], invoices: [] });
+          }
+          return !prev;
+        });
       }
       if (e.key === "Escape") {
-        setIsOpen(false);
+        handleClose();
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -48,10 +59,8 @@ export default function GlobalSearch() {
 
   useEffect(() => {
     if (isOpen) {
-      setTimeout(() => inputRef.current?.focus(), 50);
-    } else {
-      setQuery("");
-      setResults({ students: [], teachers: [], classes: [], invoices: [] });
+      const timer = setTimeout(() => inputRef.current?.focus(), 50);
+      return () => clearTimeout(timer);
     }
   }, [isOpen]);
 
@@ -174,7 +183,7 @@ export default function GlobalSearch() {
               />
               <button
                 type="button"
-                onClick={() => setIsOpen(false)}
+                onClick={handleClose}
                 style={{ background: "transparent", border: "none", color: "#94a3b8", cursor: "pointer" }}
               >
                 <X size={18} />
@@ -184,7 +193,7 @@ export default function GlobalSearch() {
             <div style={{ maxHeight: "380px", overflowY: "auto", padding: "8px 0" }}>
               {query.length >= 2 && totalResults === 0 && !loading && (
                 <div style={{ padding: "24px", textAlign: "center", color: "#94a3b8", fontSize: "0.9rem" }}>
-                  No matching records found for "{query}".
+                  No matching records found for &quot;{query}&quot;.
                 </div>
               )}
 

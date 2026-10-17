@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
 import { Role } from "@prisma/client";
+import { getAuthSecret } from "@/lib/env";
 
 /**
  * Route-to-role mapping. Each URL prefix is restricted to
@@ -40,8 +41,8 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Get JWT token from the request with robust fallback secret and cookie name detection
-  const secret = process.env.NEXTAUTH_SECRET || "school_erp_production_secret_key_min32chars!!";
+  // Get JWT token from the request using validated server secret
+  const secret = getAuthSecret();
   const hasSecureCookie = request.cookies.has("__Secure-next-auth.session-token");
 
   const token = await getToken({

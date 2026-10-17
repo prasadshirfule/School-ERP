@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getTenantDb, unauthorized, badRequest } from "@/lib/utils";
+import { getTenantDb, unauthorized, badRequest, forbidden, hasRole } from "@/lib/utils";
 
 /**
  * POST /api/certificates/generate
@@ -9,6 +9,7 @@ import { getTenantDb, unauthorized, badRequest } from "@/lib/utils";
 export async function POST(request: Request) {
   const ctx = await getTenantDb();
   if (!ctx) return unauthorized();
+  if (!hasRole(ctx.session, ["ADMIN", "PRINCIPAL"])) return forbidden();
 
   const body = await request.json().catch(() => ({}));
   const studentId = typeof body.studentId === "string" ? body.studentId.trim() : "";
@@ -125,6 +126,7 @@ export async function POST(request: Request) {
 export async function GET() {
   const ctx = await getTenantDb();
   if (!ctx) return unauthorized();
+  if (!hasRole(ctx.session, ["ADMIN", "PRINCIPAL"])) return forbidden();
 
   const logs = await ctx.db.certificateLog.findMany({
     include: {

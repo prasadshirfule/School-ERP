@@ -4,7 +4,30 @@ import bcrypt from "bcryptjs";
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log("🌱 Starting complete multi-tenant database seed...");
+  if (process.env.NODE_ENV === "production") {
+    console.error("🚨 FATAL SAFETY BLOCK: Refusing to execute development seed script in PRODUCTION environment.");
+    console.error("Production databases must never be seeded with disposable demo records or default shared passwords.");
+    process.exit(1);
+  }
+
+  const dbUrl = process.env.DATABASE_URL || "";
+  const isHostedOrProdDb = /prod|neon\.tech|supabase|pooler|rds|vercel-storage/i.test(dbUrl);
+  if (isHostedOrProdDb && process.env.ALLOW_DESTRUCTIVE_SEED !== "true") {
+    console.error("🚨 FATAL SAFETY BLOCK: DATABASE_URL appears to target a hosted or production database.");
+    console.error("To prevent catastrophic data loss, destructive seeding is blocked.");
+    console.error("Set ALLOW_DESTRUCTIVE_SEED=true only on disposable development branches.");
+    process.exit(1);
+  }
+
+  // Idempotency check: if data already exists and RESET_DB is not explicitly set, do not wipe tables
+  const existingSchoolCount = await prisma.school.count().catch(() => 0);
+  if (existingSchoolCount > 0 && process.env.RESET_DB !== "true" && process.env.ALLOW_DESTRUCTIVE_SEED !== "true") {
+    console.log(`ℹ️ Database already contains ${existingSchoolCount} school(s). Skipping seed to preserve existing records.`);
+    console.log("Run with RESET_DB=true if you intentionally want to wipe and re-seed local development data.");
+    return;
+  }
+
+  console.log("🌱 Starting development multi-tenant database seed (RESET_DB confirmed)...");
 
   const passwordHash = await bcrypt.hash("password123", 10);
 
