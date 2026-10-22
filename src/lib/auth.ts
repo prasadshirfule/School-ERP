@@ -32,6 +32,7 @@ export const authOptions: NextAuthOptions = {
   pages: {
     signIn: "/login",
     error: "/login",
+    signOut: "/login",
   },
   providers: [
     CredentialsProvider({
@@ -93,7 +94,7 @@ export const authOptions: NextAuthOptions = {
           if (errMsg.startsWith("RATE_LIMITED")) {
             throw error;
           }
-          console.error("[AUTH] Authorization error during sign in attempt");
+          console.error("[AUTH] Authorization or database error during sign in attempt:", errMsg);
           return null;
         }
       },
@@ -111,7 +112,14 @@ export const authOptions: NextAuthOptions = {
       return token;
     },
     async session({ session, token }): Promise<Session> {
-      if (session.user) {
+      if (!session.user) {
+        session.user = {
+          id: token.id as string,
+          role: token.role as Role,
+          schoolId: token.schoolId as string,
+          schoolName: (token.schoolName as string) || "School ERP",
+        };
+      } else {
         session.user.id = token.id as string;
         session.user.role = token.role as Role;
         session.user.schoolId = token.schoolId as string;

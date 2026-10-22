@@ -13,7 +13,6 @@ import {
   EyeOff,
   ShieldCheck,
   GraduationCap,
-  Users,
   CreditCard,
   HeartHandshake,
   CheckCircle2,
@@ -69,12 +68,21 @@ const DEMO_ACCOUNTS: DemoAccount[] = [
 function LoginForm() {
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get("callbackUrl");
+  const urlError = searchParams.get("error");
+
+  const initialError = urlError === "Configuration"
+    ? "Server authentication configuration error. Please verify server environment variables."
+    : urlError === "CredentialsSignin"
+    ? "Invalid email address or password. Please verify credentials and try again."
+    : urlError
+    ? `Authentication error: ${urlError}`
+    : "";
 
   const [email, setEmail] = useState("admin@dpa.edu.in");
   const [password, setPassword] = useState("password123");
   const [showPassword, setShowPassword] = useState(false);
   const [selectedRole, setSelectedRole] = useState("ADMIN");
-  const [error, setError] = useState("");
+  const [error, setError] = useState(initialError);
   const [loading, setLoading] = useState(false);
 
   const handleSelectDemo = (account: DemoAccount) => {
@@ -99,6 +107,8 @@ function LoginForm() {
       if (result?.error) {
         if (result.error.includes("RATE_LIMITED")) {
           setError("Too many login attempts. Please wait 5 minutes before trying again.");
+        } else if (result.error === "Configuration") {
+          setError("Server authentication configuration error. Please verify server deployment environment variables.");
         } else {
           setError("Invalid email address or password. Please verify credentials and try again.");
         }
@@ -114,7 +124,9 @@ function LoginForm() {
         if (sessionData?.user?.role && ROLE_DASHBOARDS[sessionData.user.role]) {
           targetUrl = ROLE_DASHBOARDS[sessionData.user.role];
         }
-      } catch (_) {}
+      } catch {
+        // Fallback to default redirect
+      }
 
       if (callbackUrl && !callbackUrl.startsWith("/login")) {
         targetUrl = callbackUrl;
@@ -122,8 +134,9 @@ function LoginForm() {
 
       // Clean document redirect ensures cookies are committed and layouts mount fresh
       window.location.href = targetUrl;
-    } catch (err: any) {
-      setError(err?.message || "An unexpected error occurred during authentication.");
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : "An unexpected error occurred during authentication.";
+      setError(errorMsg);
       setLoading(false);
     }
   };
