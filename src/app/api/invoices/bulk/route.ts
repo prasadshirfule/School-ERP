@@ -3,6 +3,15 @@ import { getTenantDb, unauthorized, badRequest } from "@/lib/utils";
 import { Prisma } from "@prisma/client";
 import { BulkInvoiceCreateSchema } from "@/lib/validations";
 
+interface StudentRecord {
+  id: string;
+  fullName: string;
+}
+
+interface ExistingInvoiceRecord {
+  studentId: string;
+}
+
 export async function POST(request: Request) {
   const ctx = await getTenantDb();
   if (!ctx) return unauthorized();
@@ -60,21 +69,21 @@ export async function POST(request: Request) {
   const due = new Date(dueDate);
 
   // Check if invoice for this feeStructure already exists for each student to avoid accidental duplication
-  const existingInvoices = await ctx.db.feeInvoice.findMany({
+  const existingInvoices = (await ctx.db.feeInvoice.findMany({
     where: {
       feeStructureId,
-      studentId: { in: students.map((s) => s.id) },
+      studentId: { in: (students as StudentRecord[]).map((s: StudentRecord) => s.id) },
     },
     select: { studentId: true },
-  });
-  const existingStudentIdSet = new Set(existingInvoices.map((inv) => inv.studentId));
+  })) as ExistingInvoiceRecord[];
+  const existingStudentIdSet = new Set(existingInvoices.map((inv: ExistingInvoiceRecord) => inv.studentId));
 
-  const eligibleStudents = students.filter((s) => !existingStudentIdSet.has(s.id));
+  const eligibleStudents = (students as StudentRecord[]).filter((s: StudentRecord) => !existingStudentIdSet.has(s.id));
   if (eligibleStudents.length === 0) {
     return badRequest("All students in this section already have an invoice for this fee structure");
   }
 
-  const invoicesData = eligibleStudents.map((s) => ({
+  const invoicesData = eligibleStudents.map((s: StudentRecord) => ({
     studentId: s.id,
     feeStructureId,
     amountDue,

@@ -46,7 +46,7 @@ export async function GET(request: Request) {
         id: s.id,
         title: s.fullName,
         subtitle: `${s.section ? `${s.section.class.name}-${s.section.name}` : "Unassigned"} • Adm: ${s.admissionNo}`,
-        href: `/parent/children`,
+        href: `/parent/students/${s.id}`,
         type: "Child",
       })),
       teachers: [],
@@ -56,7 +56,10 @@ export async function GET(request: Request) {
   }
 
   // Staff roles (ADMIN, PRINCIPAL, TEACHER, ACCOUNTANT)
-  const canViewFinancials = role === "ADMIN" || role === "PRINCIPAL" || role === "ACCOUNTANT";
+  const isAdminOrPrincipal = role === "ADMIN" || role === "PRINCIPAL";
+  const canViewFinancials = isAdminOrPrincipal || role === "ACCOUNTANT";
+  const canViewStaffDirectory = isAdminOrPrincipal;
+  const canViewClassStructure = isAdminOrPrincipal;
 
   const [students, teachers, classes, invoices] = await Promise.all([
     ctx.db.student.findMany({
@@ -72,28 +75,32 @@ export async function GET(request: Request) {
       },
       take: 6,
     }),
-    ctx.db.teacher.findMany({
-      where: {
-        OR: [
-          { fullName: { contains: q, mode: "insensitive" } },
-          { user: { email: { contains: q, mode: "insensitive" } } },
-        ],
-      },
-      include: {
-        user: { select: { email: true, phone: true } },
-        department: { select: { name: true } },
-      },
-      take: 6,
-    }),
-    ctx.db.class.findMany({
-      where: {
-        name: { contains: q, mode: "insensitive" },
-      },
-      include: {
-        sections: true,
-      },
-      take: 4,
-    }),
+    canViewStaffDirectory
+      ? ctx.db.teacher.findMany({
+          where: {
+            OR: [
+              { fullName: { contains: q, mode: "insensitive" } },
+              { user: { email: { contains: q, mode: "insensitive" } } },
+            ],
+          },
+          include: {
+            user: { select: { email: true, phone: true } },
+            department: { select: { name: true } },
+          },
+          take: 6,
+        })
+      : Promise.resolve([]),
+    canViewClassStructure
+      ? ctx.db.class.findMany({
+          where: {
+            name: { contains: q, mode: "insensitive" },
+          },
+          include: {
+            sections: true,
+          },
+          take: 4,
+        })
+      : Promise.resolve([]),
     canViewFinancials
       ? ctx.db.feeInvoice.findMany({
           where: {
@@ -111,12 +118,19 @@ export async function GET(request: Request) {
       : Promise.resolve([]),
   ]);
 
+  const getStudentHref = (studentId: string) => {
+    if (isAdminOrPrincipal) return `/admin/students/${studentId}`;
+    if (role === "ACCOUNTANT") return `/accountant/invoices?studentId=${studentId}`;
+    if (role === "TEACHER") return `/teacher/attendance`;
+    return `/`;
+  };
+
   return NextResponse.json({
     students: students.map((s: any) => ({
       id: s.id,
       title: s.fullName,
       subtitle: `${s.section ? `${s.section.class.name}-${s.section.name}` : "Unassigned"} • Adm: ${s.admissionNo}`,
-      href: `/admin/students/${s.id}`,
+      href: getStudentHref(s.id),
       type: "Student",
     })),
     teachers: teachers.map((t: any) => ({

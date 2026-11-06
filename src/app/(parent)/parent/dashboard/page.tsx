@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   GraduationCap,
-  ArrowRight,
   HeartHandshake,
   CheckCircle2,
   Receipt,
@@ -61,7 +60,7 @@ export default function ParentDashboard() {
         <div>
           <h1 className="page-title">Parent Workspace</h1>
           <p className="page-subtitle">
-            Track your children's daily attendance records, exam report cards, fee dues, and homework.
+            Track your children&apos;s daily attendance records, exam report cards, fee dues, and homework.
           </p>
         </div>
       </div>

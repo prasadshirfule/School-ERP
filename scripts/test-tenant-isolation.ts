@@ -52,8 +52,10 @@ function createMockPrismaClient(initialStore: Record<string, any[]>) {
           };
         }
       }
+      clientWrapper.$transaction = async (cb: any) => cb(clientWrapper);
       return clientWrapper;
     },
+    $transaction: async (cb: any) => cb(baseClient),
   };
 
   // Attach model accessors to baseClient for tenantClient pre-checks
@@ -73,24 +75,31 @@ function executeMockOperation(model: string, op: string, args: any, store: Recor
 
   if (op === "findMany") {
     const where = args?.where || {};
-    return list.filter((item) => matchWhere(item, where));
+    return list.filter((item) => matchWhere(item, where, store));
   }
 
   if (op === "findFirst") {
     const where = args?.where || {};
-    return list.find((item) => matchWhere(item, where)) || null;
+    return list.find((item) => matchWhere(item, where, store)) || null;
   }
 
   if (op === "findUnique" || op === "findUniqueOrThrow") {
     const where = args?.where || {};
-    const found = list.find((item) => matchWhere(item, where)) || null;
+    const found = list.find((item) => matchWhere(item, where, store)) || null;
     if (!found && op === "findUniqueOrThrow") {
       throw new Prisma.PrismaClientKnownRequestError("Record not found", {
         code: "P2025",
         clientVersion: "mock",
       });
     }
-    return found;
+    if (found && args?.select) {
+      const projected: any = {};
+      for (const k of Object.keys(args.select)) {
+        if (args.select[k]) projected[k] = found[k];
+      }
+      return projected;
+    }
+    return found ? { ...found } : null;
   }
 
   if (op === "create") {
@@ -101,7 +110,7 @@ function executeMockOperation(model: string, op: string, args: any, store: Recor
 
   if (op === "update") {
     const where = args?.where || {};
-    const item = list.find((i) => matchWhere(i, where));
+    const item = list.find((i) => matchWhere(i, where, store));
     if (!item) {
       throw new Prisma.PrismaClientKnownRequestError("Record not found", {
         code: "P2025",
@@ -114,7 +123,7 @@ function executeMockOperation(model: string, op: string, args: any, store: Recor
 
   if (op === "upsert") {
     const where = args?.where || {};
-    const item = list.find((i) => matchWhere(i, where));
+    const item = list.find((i) => matchWhere(i, where, store));
     if (item) {
       Object.assign(item, args.update);
       return item;
@@ -127,7 +136,7 @@ function executeMockOperation(model: string, op: string, args: any, store: Recor
 
   if (op === "delete") {
     const where = args?.where || {};
-    const idx = list.findIndex((i) => matchWhere(i, where));
+    const idx = list.findIndex((i) => matchWhere(i, where, store));
     if (idx === -1) {
       throw new Prisma.PrismaClientKnownRequestError("Record not found", {
         code: "P2025",
@@ -139,17 +148,31 @@ function executeMockOperation(model: string, op: string, args: any, store: Recor
 
   if (op === "count") {
     const where = args?.where || {};
-    return list.filter((item) => matchWhere(item, where)).length;
+    return list.filter((item) => matchWhere(item, where, store)).length;
   }
 
   return null;
 }
 
-function matchWhere(item: any, where: any): boolean {
+function matchWhere(item: any, where: any, store?: Record<string, any[]>): boolean {
   if (!where) return true;
   for (const [key, val] of Object.entries(where)) {
     if (val !== null && typeof val === "object" && !(val instanceof Date)) {
-      if (!matchWhere(item, val)) return false;
+      if (key in item) {
+        if (!matchWhere(item[key], val, store)) return false;
+      } else if (key === "student" && item.studentId && store?.Student) {
+        const student = store.Student.find((s) => s.id === item.studentId);
+        if (!student || !matchWhere(student, val, store)) return false;
+      } else if (key === "user" && item.userId && store?.User) {
+        const user = store.User.find((u) => u.id === item.userId);
+        if (!user || !matchWhere(user, val, store)) return false;
+      } else if (key === "subject" && item.subjectId && store?.Subject) {
+        const subject = store.Subject.find((s) => s.id === item.subjectId);
+        if (!subject || !matchWhere(subject, val, store)) return false;
+      } else {
+        // Compound unique key like studentId_subjectId_examName: { studentId, subjectId, examName }
+        if (!matchWhere(item, val, store)) return false;
+      }
     } else if (val instanceof Date) {
       if (new Date(item[key]).getTime() !== val.getTime()) return false;
     } else if (item[key] !== val) {
@@ -259,73 +282,8 @@ async function runTests() {
 
   const { baseClient } = createMockPrismaClient(initialData);
 
-  // Re-bind tenantClient to use baseClient
-  const clientA = baseClient.$extends({
-    name: "tenant-isolation",
-    query: {
-      $allModels: {
-        async $allOperations({ model, operation, args, query }: any) {
-          if (!model || !TENANT_SCOPED_MODELS.has(model)) {
-            return query(args);
-          }
-          if (["findFirst", "findFirstOrThrow", "findMany", "count", "aggregate", "groupBy"].includes(operation)) {
-            args.where = { ...args.where, schoolId: schoolA };
-            return query(args);
-          }
-          if (["create", "createMany", "createManyAndReturn"].includes(operation)) {
-            args.data = { ...args.data, schoolId: schoolA };
-            return query(args);
-          }
-          if (operation === "findUnique" || operation === "findUniqueOrThrow") {
-            const result = await query(args);
-            if (result && (result as any).schoolId !== schoolA) {
-              if (operation === "findUniqueOrThrow") {
-                throw new Prisma.PrismaClientKnownRequestError("Record not found (tenant boundary)", {
-                  code: "P2025",
-                  clientVersion: "mock",
-                });
-              }
-              return null;
-            }
-            return result;
-          }
-          if (operation === "update" || operation === "delete") {
-            if (operation === "update" && args.data?.schoolId !== undefined) {
-              throw new Error("Cannot modify schoolId through tenant client");
-            }
-            const modelAccessor = model.charAt(0).toLowerCase() + model.slice(1);
-            const existing = await baseClient[modelAccessor].findFirst({
-              where: { ...args.where, schoolId: schoolA },
-            });
-            if (!existing) {
-              throw new Prisma.PrismaClientKnownRequestError("Record not found (tenant boundary)", {
-                code: "P2025",
-                clientVersion: "mock",
-              });
-            }
-            return query(args);
-          }
-          if (operation === "upsert") {
-            const { where, create, update } = args;
-            if (create?.schoolId !== undefined || update?.schoolId !== undefined) {
-              throw new Error("Cannot set schoolId through tenant client — it is injected automatically");
-            }
-            args.create = { ...create, schoolId: schoolA };
-            const modelAccessor = model.charAt(0).toLowerCase() + model.slice(1);
-            const unscopedRow = await baseClient[modelAccessor].findFirst({ where });
-            if (unscopedRow && unscopedRow.schoolId !== schoolA) {
-              throw new Prisma.PrismaClientKnownRequestError("Record not found (tenant boundary)", {
-                code: "P2025",
-                clientVersion: "mock",
-              });
-            }
-            return query(args);
-          }
-          return query(args);
-        },
-      },
-    },
-  });
+  // Bind tenantClient directly to baseClient
+  const clientA = tenantClient(schoolA, baseClient);
 
   console.log("--- TEST GROUP 1: Tenant Isolation Smoke Test ---");
 
@@ -652,6 +610,73 @@ async function runTests() {
     if (e.code === "P2025") assignUpdateBlocked = true;
   }
   assert(assignUpdateBlocked, "update(Assignment) on School B record is blocked with P2025");
+
+  console.log("\n--- TEST GROUP 9: Interactive Transaction & Projection Regression Tests ---");
+
+  // 9.1 findUnique with select projection on School A record preserves caller projection
+  const projectedStudent = await clientA.student.findUnique({
+    where: { id: "stud-A1" },
+    select: { id: true, fullName: true },
+  });
+  assert(
+    projectedStudent !== null &&
+      projectedStudent.id === "stud-A1" &&
+      projectedStudent.fullName === "Aarav Sharma" &&
+      projectedStudent.schoolId === undefined,
+    "findUnique with select projection returns requested fields and strips injected schoolId"
+  );
+
+  // 9.2 findUnique with select projection on School B record returns null (no cross-tenant leakage)
+  const crossTenantProjected = await clientA.student.findUnique({
+    where: { id: "stud-B1" },
+    select: { id: true, fullName: true },
+  });
+  assert(
+    crossTenantProjected === null,
+    "findUnique with select projection on School B record returns null for School A client"
+  );
+
+  // 9.3 findUniqueOrThrow with select projection on School B record throws P2025
+  let threwP2025OnSelect = false;
+  try {
+    await clientA.student.findUniqueOrThrow({
+      where: { id: "stud-B1" },
+      select: { id: true },
+    });
+  } catch (e: any) {
+    if (e.code === "P2025") threwP2025OnSelect = true;
+  }
+  assert(threwP2025OnSelect, "findUniqueOrThrow with select projection on School B record throws P2025");
+
+  // 9.4 Interactive transaction: create-then-update within same transaction succeeds
+  let txSucceeded = false;
+  await clientA.$transaction(async (tx: any) => {
+    const created = await tx.student.create({
+      data: { fullName: "Tx Created Student", admissionNo: "TX-999" },
+    });
+    const updated = await tx.student.update({
+      where: { id: created.id },
+      data: { fullName: "Tx Updated Student" },
+    });
+    if (updated && updated.fullName === "Tx Updated Student") {
+      txSucceeded = true;
+    }
+  });
+  assert(txSucceeded, "create-then-update in interactive transaction succeeds without P2025");
+
+  // 9.5 Interactive transaction: cross-tenant update is strictly blocked with P2025
+  let txCrossTenantBlocked = false;
+  try {
+    await clientA.$transaction(async (tx: any) => {
+      await tx.student.update({
+        where: { id: "stud-B1" },
+        data: { fullName: "Hacked In Tx" },
+      });
+    });
+  } catch (e: any) {
+    if (e.code === "P2025") txCrossTenantBlocked = true;
+  }
+  assert(txCrossTenantBlocked, "cross-tenant update inside interactive transaction is blocked with P2025");
 
   console.log("\n══════════════════════════════════════════════════════════");
   console.log(`TEST SUMMARY: ${passed} passed, ${failed} failed.`);

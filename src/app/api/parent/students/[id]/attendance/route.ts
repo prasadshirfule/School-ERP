@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getRequiredSession, unauthorized } from "@/lib/utils";
 import { tenantClient } from "@/lib/tenant";
+import { StudentParent } from "@prisma/client";
 
 export async function GET(
   request: Request,
@@ -18,7 +19,7 @@ export async function GET(
     include: { students: true },
   });
 
-  if (!parent || !parent.students.some((sp) => sp.studentId === studentId)) {
+  if (!parent || !parent.students.some((sp: StudentParent) => sp.studentId === studentId)) {
     return NextResponse.json({ error: "Student not found" }, { status: 404 });
   }
 

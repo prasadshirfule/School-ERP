@@ -1,6 +1,14 @@
 import { NextResponse } from "next/server";
 import { getTenantDb, unauthorized, badRequest, forbidden, hasRole } from "@/lib/utils";
-import { Prisma } from "@prisma/client";
+import { Prisma, Payment } from "@prisma/client";
+
+type InvoiceWithRelations = Prisma.FeeInvoiceGetPayload<{
+  include: {
+    student: true;
+    feeStructure: true;
+    payments: true;
+  };
+}>;
 
 export async function GET(request: Request) {
   const ctx = await getTenantDb();
@@ -46,7 +54,7 @@ export async function GET(request: Request) {
   });
 
   // Serialize Decimals to strings
-  const serialized = invoices.map((inv) => ({
+  const serialized = (invoices as InvoiceWithRelations[]).map((inv: InvoiceWithRelations) => ({
     ...inv,
     amountDue: inv.amountDue.toFixed(2),
     discountAmount: inv.discountAmount.toFixed(2),
@@ -54,7 +62,7 @@ export async function GET(request: Request) {
       ...inv.feeStructure,
       amount: inv.feeStructure.amount.toFixed(2),
     },
-    payments: inv.payments.map((p) => ({
+    payments: inv.payments.map((p: Payment) => ({
       ...p,
       amount: p.amount.toFixed(2),
     })),

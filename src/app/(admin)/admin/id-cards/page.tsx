@@ -44,10 +44,27 @@ export default function IdCardsPage() {
   const [selectedStudentIds, setSelectedStudentIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [schoolInfo, setSchoolInfo] = useState<{ name: string; boardType: string; affiliationNumber?: string }>({
-    name: "Delhi Public Academy",
+    name: "",
     boardType: "CBSE",
-    affiliationNumber: "CBSE/AFF/2026/98214",
+    affiliationNumber: "",
   });
+  const [schoolLoading, setSchoolLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/schools/settings")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data?.name) {
+          setSchoolInfo({
+            name: data.name,
+            boardType: data.boardType || "CBSE",
+            affiliationNumber: data.affiliationNumber || "",
+          });
+        }
+      })
+      .catch((err) => console.error("Error loading school branding:", err))
+      .finally(() => setSchoolLoading(false));
+  }, []);
 
   useEffect(() => {
     fetch("/api/classes")
@@ -209,9 +226,10 @@ export default function IdCardsPage() {
                 <div className="id-card-container">
                   {/* Card Header */}
                   <div className="id-card-header">
-                    <div className="id-card-school-name">{schoolInfo.name}</div>
+                    <div className="id-card-school-name">{schoolInfo.name || "School Identity Card"}</div>
                     <div className="id-card-school-sub">
-                      {schoolInfo.boardType} Affiliated • {schoolInfo.affiliationNumber}
+                      {schoolInfo.boardType ? `${schoolInfo.boardType} Affiliated` : "Recognized Institution"}
+                      {schoolInfo.affiliationNumber ? ` • ${schoolInfo.affiliationNumber}` : ""}
                     </div>
                   </div>
 

@@ -18,6 +18,8 @@ import {
   CheckCircle2,
 } from "lucide-react";
 
+import { sanitizeCallbackUrl } from "@/lib/redirect";
+
 const ROLE_DASHBOARDS: Record<string, string> = {
   ADMIN: "/admin/dashboard",
   PRINCIPAL: "/admin/dashboard",
@@ -128,9 +130,8 @@ function LoginForm() {
         // Fallback to default redirect
       }
 
-      if (callbackUrl && !callbackUrl.startsWith("/login")) {
-        targetUrl = callbackUrl;
-      }
+      // Validate and sanitize callbackUrl to prevent open redirects
+      targetUrl = sanitizeCallbackUrl(callbackUrl, targetUrl);
 
       // Clean document redirect ensures cookies are committed and layouts mount fresh
       window.location.href = targetUrl;

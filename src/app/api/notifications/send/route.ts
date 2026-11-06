@@ -177,11 +177,14 @@ export async function POST(req: NextRequest) {
       senderName: school?.name || "School Administration",
     });
 
+    const isAllFailed = dispatchResult.successful === 0 && dispatchResult.failed > 0;
     return NextResponse.json({
-      success: true,
-      message: `Dispatched ${dispatchResult.successful} out of ${dispatchResult.total} notifications via ${channel}.`,
+      success: !isAllFailed,
+      message: dispatchResult.simulated > 0
+        ? `Development Sandbox: Simulated ${dispatchResult.simulated} notification(s) via ${channel}.`
+        : `Dispatched ${dispatchResult.successful} out of ${dispatchResult.total} notifications via ${channel}.`,
       result: dispatchResult,
-    });
+    }, { status: isAllFailed ? 502 : 200 });
   } catch (error) {
     console.error("Send notification error:", error);
     return NextResponse.json({ error: "Failed to dispatch notifications" }, { status: 500 });

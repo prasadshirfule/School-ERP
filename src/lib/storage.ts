@@ -133,48 +133,142 @@ class LocalStorageDriver implements StorageDriver {
 
 /**
  * S3 / Cloudflare R2 Storage Driver
+ * Provides durable cloud object storage with school-scoped key prefixes.
  */
 class S3StorageDriver implements StorageDriver {
   private bucket: string;
+  private region: string;
+  private endpoint?: string;
+  private customDomain?: string;
 
   constructor() {
     this.bucket = process.env.AWS_S3_BUCKET || process.env.R2_BUCKET || "";
-    const isProd = process.env.NODE_ENV === "production";
+    this.region = process.env.AWS_S3_REGION || process.env.AWS_REGION || "auto";
+    this.endpoint = process.env.AWS_S3_ENDPOINT;
+    this.customDomain = process.env.AWS_S3_CUSTOM_DOMAIN;
 
-    if (!this.bucket) {
-      if (isProd) {
-        throw new Error(
-          "FATAL STORAGE CONFIGURATION: STORAGE_PROVIDER is set to 's3' but AWS_S3_BUCKET is not defined in production."
-        );
-      }
+    const isProd = process.env.NODE_ENV === "production";
+    if (!this.bucket && isProd) {
+      throw new Error(
+        "FATAL STORAGE CONFIGURATION: STORAGE_PROVIDER is set to 's3' but AWS_S3_BUCKET is not defined in production."
+      );
     }
   }
 
-  async upload(options: UploadOptions): Promise<{ url: string; path: string }> {
-    if (!this.bucket) {
-      if (process.env.NODE_ENV === "production") {
-        throw new Error("Cloud storage is misconfigured: missing bucket name in production.");
-      }
-      const local = new LocalStorageDriver();
-      return local.upload(options);
+  private async getS3Client() {
+    const { S3Client } = await import("@aws-sdk/client-s3");
+    const accessKeyId = process.env.AWS_ACCESS_KEY_ID;
+    const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
+
+    const clientConfig: Record<string, unknown> = {
+      region: this.region,
+    };
+
+    if (this.endpoint) {
+      clientConfig.endpoint = this.endpoint;
     }
 
-    // In a production deployment with configured S3 bucket, upload to S3 endpoint
-    const local = new LocalStorageDriver();
-    return local.upload(options);
+    if (accessKeyId && secretAccessKey) {
+      clientConfig.credentials = {
+        accessKeyId,
+        secretAccessKey,
+      };
+    }
+
+    return new S3Client(clientConfig);
+  }
+
+  async upload({
+    buffer,
+    filename,
+    folder = "documents",
+    contentType,
+    schoolId,
+  }: UploadOptions): Promise<{ url: string; path: string }> {
+    if (!this.bucket) {
+      if (process.env.NODE_ENV === "production") {
+        throw new Error("Cloud storage is misconfigured: missing AWS_S3_BUCKET in production.");
+      }
+      const local = new LocalStorageDriver();
+      return local.upload({ buffer, filename, folder, contentType, schoolId });
+    }
+
+    const safeFolder = ["photos", "logos", "assignments", "certificates", "documents"].includes(folder)
+      ? folder
+      : "documents";
+    const safeSchool = schoolId ? schoolId.replace(/[^a-zA-Z0-9_-]/g, "") : "common";
+    const sanitized = path.basename(filename).replace(/[^a-zA-Z0-9.-]/g, "_");
+    const objectKey = `uploads/${safeSchool}/${safeFolder}/${Date.now()}-${sanitized}`;
+
+    try {
+      const { PutObjectCommand } = await import("@aws-sdk/client-s3");
+      const client = await this.getS3Client();
+
+      await client.send(
+        new PutObjectCommand({
+          Bucket: this.bucket,
+          Key: objectKey,
+          Body: buffer,
+          ContentType: contentType || "application/octet-stream",
+        })
+      );
+
+      const url = this.getPublicUrl(objectKey);
+      return { url, path: objectKey };
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : "S3 upload failed";
+      console.error("[STORAGE_S3] Failed to upload object:", errMsg);
+      throw new Error(`Cloud storage upload failed: ${errMsg}`);
+    }
   }
 
   async delete(filePath: string): Promise<boolean> {
-    const local = new LocalStorageDriver();
-    return local.delete(filePath);
+    // If it is a legacy local file path, delete through local driver
+    if (filePath.startsWith("/uploads/")) {
+      const local = new LocalStorageDriver();
+      return local.delete(filePath);
+    }
+
+    if (!this.bucket) return false;
+
+    try {
+      const { DeleteObjectCommand } = await import("@aws-sdk/client-s3");
+      const client = await this.getS3Client();
+      const objectKey = filePath.replace(/^https?:\/\/[^/]+\//, "").replace(/^\/+/, "");
+
+      await client.send(
+        new DeleteObjectCommand({
+          Bucket: this.bucket,
+          Key: objectKey,
+        })
+      );
+      return true;
+    } catch (err) {
+      console.error("[STORAGE_S3] Failed to delete object:", err);
+      return false;
+    }
   }
 
   getPublicUrl(filePath: string): string {
     if (filePath.startsWith("http://") || filePath.startsWith("https://")) {
       return filePath;
     }
-    const local = new LocalStorageDriver();
-    return local.getPublicUrl(filePath);
+
+    if (filePath.startsWith("/uploads/")) {
+      return filePath;
+    }
+
+    const cleanKey = filePath.replace(/^\/+/, "");
+
+    if (this.customDomain) {
+      return `https://${this.customDomain.replace(/\/+$/, "")}/${cleanKey}`;
+    }
+
+    if (this.endpoint) {
+      return `${this.endpoint.replace(/\/+$/, "")}/${this.bucket}/${cleanKey}`;
+    }
+
+    return `https://${this.bucket}.s3.${this.region}.amazonaws.com/${cleanKey}`;
   }
 }
 

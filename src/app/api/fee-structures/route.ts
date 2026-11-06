@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getTenantDb, unauthorized } from "@/lib/utils";
+import { FeeStructure } from "@prisma/client";
 
 export async function GET() {
   const ctx = await getTenantDb();
@@ -10,7 +11,7 @@ export async function GET() {
   });
 
   return NextResponse.json(
-    feeStructures.map((f) => ({
+    (feeStructures as FeeStructure[]).map((f: FeeStructure) => ({
       ...f,
       amount: f.amount.toFixed(2),
     }))

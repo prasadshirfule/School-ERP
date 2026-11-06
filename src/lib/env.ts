@@ -15,7 +15,10 @@ const FORBIDDEN_DEMO_SECRETS = new Set([
 
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
-  DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
+  NEON_DATABASE_URL: z.string().min(1, "NEON_DATABASE_URL is required"),
+  NEON_DATABASE_URL_UNPOOLED: z.string().min(1, "NEON_DATABASE_URL_UNPOOLED is required"),
+  DATABASE_URL: z.string().optional(),
+  DATABASE_URL_UNPOOLED: z.string().optional(),
   NEXTAUTH_SECRET: z.string().min(32, "NEXTAUTH_SECRET must be at least 32 characters long").optional(),
   AUTH_SECRET: z.string().min(32).optional(),
   NEXTAUTH_URL: z.string().url().optional(),
@@ -54,9 +57,15 @@ export function validateEnv(): EnvConfig {
     }
   }
 
+  const rawNeonDbUrl = process.env.NEON_DATABASE_URL || process.env.DATABASE_URL;
+  const rawNeonUnpooledUrl = process.env.NEON_DATABASE_URL_UNPOOLED || process.env.DATABASE_URL_UNPOOLED;
+
   const rawEnv = {
     NODE_ENV: process.env.NODE_ENV,
+    NEON_DATABASE_URL: rawNeonDbUrl,
+    NEON_DATABASE_URL_UNPOOLED: rawNeonUnpooledUrl,
     DATABASE_URL: process.env.DATABASE_URL,
+    DATABASE_URL_UNPOOLED: process.env.DATABASE_URL_UNPOOLED,
     NEXTAUTH_SECRET: rawAuthSecret,
     AUTH_SECRET: process.env.AUTH_SECRET,
     NEXTAUTH_URL: rawNextAuthUrl,
@@ -95,8 +104,11 @@ export function validateEnv(): EnvConfig {
       );
     }
 
-    if (!rawEnv.DATABASE_URL) {
-      throw new Error("FATAL: DATABASE_URL is missing in production environment.");
+    if (!rawEnv.NEON_DATABASE_URL) {
+      throw new Error("FATAL: NEON_DATABASE_URL is missing in production environment.");
+    }
+    if (!rawEnv.NEON_DATABASE_URL_UNPOOLED) {
+      throw new Error("FATAL: NEON_DATABASE_URL_UNPOOLED is missing in production environment.");
     }
   } else if (isBuildPhase && isProd) {
     if (rawAuthSecret && FORBIDDEN_DEMO_SECRETS.has(rawAuthSecret)) {

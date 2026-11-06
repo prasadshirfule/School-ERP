@@ -1,6 +1,14 @@
 import { NextResponse } from "next/server";
 import { getRequiredSession, unauthorized } from "@/lib/utils";
 import { tenantClient } from "@/lib/tenant";
+import { Prisma, Payment, StudentParent } from "@prisma/client";
+
+type ParentInvoiceWithRelations = Prisma.FeeInvoiceGetPayload<{
+  include: {
+    feeStructure: true;
+    payments: true;
+  };
+}>;
 
 export async function GET(
   request: Request,
@@ -18,25 +26,25 @@ export async function GET(
     include: { students: true },
   });
 
-  if (!parent || !parent.students.some((sp) => sp.studentId === studentId)) {
+  if (!parent || !parent.students.some((sp: StudentParent) => sp.studentId === studentId)) {
     return NextResponse.json({ error: "Student not found" }, { status: 404 });
   }
 
-  const invoices = await db.feeInvoice.findMany({
+  const invoices = (await db.feeInvoice.findMany({
     where: { studentId },
     include: {
       feeStructure: true,
       payments: { orderBy: { paidAt: "desc" } },
     },
     orderBy: { dueDate: "desc" },
-  });
+  })) as ParentInvoiceWithRelations[];
 
-  const serialized = invoices.map((inv) => ({
+  const serialized = invoices.map((inv: ParentInvoiceWithRelations) => ({
     ...inv,
     amountDue: inv.amountDue.toFixed(2),
     discountAmount: inv.discountAmount.toFixed(2),
     feeStructure: { ...inv.feeStructure, amount: inv.feeStructure.amount.toFixed(2) },
-    payments: inv.payments.map((p) => ({ ...p, amount: p.amount.toFixed(2) })),
+    payments: inv.payments.map((p: Payment) => ({ ...p, amount: p.amount.toFixed(2) })),
   }));
 
   return NextResponse.json(serialized);

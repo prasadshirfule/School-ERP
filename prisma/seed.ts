@@ -10,7 +10,7 @@ async function main() {
     process.exit(1);
   }
 
-  const dbUrl = process.env.DATABASE_URL || "";
+  const dbUrl = process.env.NEON_DATABASE_URL || process.env.DATABASE_URL || "";
   const isHostedOrProdDb = /prod|neon\.tech|supabase|pooler|rds|vercel-storage/i.test(dbUrl);
   if (isHostedOrProdDb && process.env.ALLOW_DESTRUCTIVE_SEED !== "true") {
     console.error("🚨 FATAL SAFETY BLOCK: DATABASE_URL appears to target a hosted or production database.");

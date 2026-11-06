@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { GraduationCap, ArrowRight, Sparkles, User, Calendar, MapPin, Phone, ShieldCheck, HeartHandshake } from "lucide-react";
+import { GraduationCap, ArrowRight, Sparkles, User, Calendar, MapPin, HeartHandshake } from "lucide-react";
 
 type StudentData = {
   id: string;
@@ -43,7 +43,7 @@ export default function ParentStudentsPage() {
   if (loading) {
     return (
       <div className="loading">
-        <Sparkles size={18} className="animate-spin" /> Loading children's profiles...
+        <Sparkles size={18} className="animate-spin" /> Loading children&apos;s profiles...
       </div>
     );
   }
@@ -65,7 +65,7 @@ export default function ParentStudentsPage() {
             </div>
             <div className="empty-state-title">No children linked to your account</div>
             <p className="empty-state-text">
-              Please contact the school administrative office to link your parent account with your child's enrollment.
+              Please contact the school administrative office to link your parent account with your child&apos;s enrollment.
             </p>
           </div>
         </div>

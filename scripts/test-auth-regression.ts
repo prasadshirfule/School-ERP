@@ -25,6 +25,7 @@ import { Role } from "@prisma/client";
 import prisma from "../src/lib/prisma";
 import bcrypt from "bcryptjs";
 import { TENANT_SCOPED_MODELS, tenantClient } from "../src/lib/tenant";
+import { sanitizeCallbackUrl } from "../src/lib/redirect";
 
 let passed = 0;
 let failed = 0;
@@ -473,6 +474,62 @@ async function runRegressionSuite() {
 
   const client = tenantClient("sch_dpa_delhi");
   assert(typeof client === "object" && client !== null, "tenantClient successfully instantiates scoped client");
+
+  // ═══════════════════════════════════════════════════════════════════
+  // REQUIREMENT 10: Open Redirect Defense Verification
+  // ═══════════════════════════════════════════════════════════════════
+  console.log("\n--- 10. Open Redirect Defense & URL Sanitization ---");
+  const fallback = "/admin/dashboard";
+
+  // External URLs
+  assert(
+    sanitizeCallbackUrl("https://evil.com/phish", fallback) === fallback,
+    "External https://evil.com URL is rejected and falls back safely"
+  );
+  assert(
+    sanitizeCallbackUrl("http://attacker.com", fallback) === fallback,
+    "External http://attacker.com URL is rejected and falls back safely"
+  );
+  // Protocol-relative URLs
+  assert(
+    sanitizeCallbackUrl("//evil.com/test", fallback) === fallback,
+    "Protocol-relative //evil.com URL is rejected"
+  );
+  assert(
+    sanitizeCallbackUrl("/\\evil.com", fallback) === fallback,
+    "Backslash bypass /\\\\evil.com is rejected"
+  );
+  assert(
+    sanitizeCallbackUrl("\\evil.com", fallback) === fallback,
+    "Leading backslash \\\\evil.com is rejected"
+  );
+  // Control characters & malformed URLs
+  assert(
+    sanitizeCallbackUrl("/admin\r\nHost: evil.com", fallback) === fallback,
+    "CRLF header injection attempt is rejected"
+  );
+  assert(
+    sanitizeCallbackUrl("javascript:alert(1)", fallback) === fallback,
+    "javascript: pseudo-protocol is rejected"
+  );
+  // Auth loop prevention
+  assert(
+    sanitizeCallbackUrl("/login", fallback) === fallback,
+    "/login destination is rejected to prevent infinite redirect loops"
+  );
+  assert(
+    sanitizeCallbackUrl("/login?error=test", fallback) === fallback,
+    "/login?error=... destination is rejected to prevent redirect loops"
+  );
+  // Valid internal paths
+  assert(
+    sanitizeCallbackUrl("/admin/students", fallback) === "/admin/students",
+    "Valid internal relative path /admin/students is accepted"
+  );
+  assert(
+    sanitizeCallbackUrl("/parent/fees?tab=receipts#history", fallback) === "/parent/fees?tab=receipts#history",
+    "Valid internal path with search and hash parameters is accepted"
+  );
 
   console.log("\n═══════════════════════════════════════════════════════════════════════");
   console.log(`AUTH REGRESSION SUMMARY: ${passed} passed, ${failed} failed.`);

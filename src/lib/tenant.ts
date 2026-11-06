@@ -82,22 +82,36 @@ const CREATE_OPERATIONS = new Set([
  * Every query through this client is automatically filtered/injected
  * with the given schoolId. No query can read or write data belonging
  * to a different tenant.
+ *
+ * Supports an optional baseClient (such as an interactive transaction client tx).
  */
-export function tenantClient(schoolId: string) {
+export function tenantClient(schoolId: string, baseClient?: any) {
   if (!schoolId || typeof schoolId !== "string" || schoolId.trim() === "") {
     throw new Error("tenantClient requires a valid, non-empty schoolId");
   }
 
   const cleanSchoolId = schoolId.trim();
+  const rootOrTx = baseClient || prisma;
 
-  return prisma.$extends({
+  return rootOrTx.$extends({
     name: "tenant-isolation",
     query: {
       $allModels: {
-        async $allOperations({ model, operation, args, query }) {
+        async $allOperations(this: any, { model, operation, args, query }: any) {
           // If School model or unhandled root, allow normal execution
           if (!model || model === "School") {
             return query(args);
+          }
+
+          // Resolve active client context (supporting interactive transactions & tx injection)
+          let activeClient: any = rootOrTx;
+          try {
+            if (this && typeof Prisma?.getExtensionContext === "function") {
+              const ctx = Prisma.getExtensionContext(this);
+              if (ctx) activeClient = ctx;
+            }
+          } catch {
+            activeClient = rootOrTx;
           }
 
           // ══════════════════════════════════════════════════════════════════
@@ -106,7 +120,7 @@ export function tenantClient(schoolId: string) {
           if (TENANT_SCOPED_MODELS.has(model)) {
             // READS: inject schoolId into where
             if (READ_OPERATIONS.has(operation)) {
-              (args as any).where = { ...(args as any).where, schoolId: cleanSchoolId };
+              args.where = { ...(args.where || {}), schoolId: cleanSchoolId };
               return query(args);
             }
 
@@ -116,26 +130,41 @@ export function tenantClient(schoolId: string) {
                 operation === "createMany" ||
                 operation === "createManyAndReturn"
               ) {
-                if (Array.isArray((args as any).data)) {
-                  (args as any).data = (args as any).data.map((d: any) => ({
+                if (Array.isArray(args.data)) {
+                  args.data = args.data.map((d: any) => ({
                     ...d,
                     schoolId: cleanSchoolId,
                   }));
                 } else {
-                  (args as any).data = { ...(args as any).data, schoolId: cleanSchoolId };
+                  args.data = { ...(args.data || {}), schoolId: cleanSchoolId };
                 }
               } else {
-                (args as any).data = { ...(args as any).data, schoolId: cleanSchoolId };
+                args.data = { ...(args.data || {}), schoolId: cleanSchoolId };
               }
               return query(args);
             }
 
-            // findUnique / findUniqueOrThrow: post-validate
+            // findUnique / findUniqueOrThrow: post-validate with projection preservation
             if (
               operation === "findUnique" ||
               operation === "findUniqueOrThrow"
             ) {
-              const result = await query(args);
+              const hasSelect = Boolean(args?.select);
+              const hadSelectedSchoolId = Boolean(args?.select?.schoolId);
+
+              let queryArgs = args;
+              if (hasSelect && !hadSelectedSchoolId) {
+                queryArgs = {
+                  ...args,
+                  select: {
+                    ...args.select,
+                    schoolId: true,
+                  },
+                };
+              }
+
+              const result = await query(queryArgs);
+
               if (result && (result as any).schoolId !== cleanSchoolId) {
                 if (operation === "findUniqueOrThrow") {
                   throw new Prisma.PrismaClientKnownRequestError(
@@ -148,18 +177,24 @@ export function tenantClient(schoolId: string) {
                 }
                 return null; // hide cross-tenant result
               }
+
+              // Strip injected schoolId if caller did not select it
+              if (result && hasSelect && !hadSelectedSchoolId) {
+                delete (result as any).schoolId;
+              }
+
               return result;
             }
 
             // UPDATE: verify target record belongs to this tenant and block changing schoolId
             if (operation === "update") {
-              if ((args as any).data?.schoolId !== undefined) {
+              if (args.data?.schoolId !== undefined) {
                 throw new Error("Cannot modify schoolId through tenant client");
               }
               const modelAccessor =
                 model.charAt(0).toLowerCase() + model.slice(1);
-              const whereClause = (args as any).where;
-              const existing = await (prisma as any)[modelAccessor].findFirst({
+              const whereClause = args.where;
+              const existing = await activeClient[modelAccessor].findFirst({
                 where: { ...flattenWhere(whereClause), schoolId: cleanSchoolId },
                 select: { id: true },
               });
@@ -177,7 +212,7 @@ export function tenantClient(schoolId: string) {
 
             // UPSERT
             if (operation === "upsert") {
-              const { where, create, update } = args as any;
+              const { where, create, update } = args;
 
               if (
                 create?.schoolId !== undefined ||
@@ -188,11 +223,12 @@ export function tenantClient(schoolId: string) {
                 );
               }
 
-              (args as any).create = { ...create, schoolId: cleanSchoolId };
+              args.create = { ...create, schoolId: cleanSchoolId };
 
               const modelAccessor =
                 model.charAt(0).toLowerCase() + model.slice(1);
-              const unscopedRow = await (prisma as any)[
+              // Unscoped check across tenants to prevent hijacking cross-tenant unique keys
+              const unscopedRow = await (rootOrTx as any)[
                 modelAccessor
               ].findFirst({
                 where: flattenWhere(where),
@@ -215,8 +251,8 @@ export function tenantClient(schoolId: string) {
             if (operation === "delete") {
               const modelAccessor =
                 model.charAt(0).toLowerCase() + model.slice(1);
-              const whereClause = (args as any).where;
-              const existing = await (prisma as any)[modelAccessor].findFirst({
+              const whereClause = args.where;
+              const existing = await activeClient[modelAccessor].findFirst({
                 where: { ...flattenWhere(whereClause), schoolId: cleanSchoolId },
                 select: { id: true },
               });
@@ -234,7 +270,7 @@ export function tenantClient(schoolId: string) {
 
             // updateMany / deleteMany
             if (WRITE_WHERE_OPERATIONS.has(operation)) {
-              (args as any).where = { ...(args as any).where, schoolId: cleanSchoolId };
+              args.where = { ...(args.where || {}), schoolId: cleanSchoolId };
               return query(args);
             }
           }
@@ -246,17 +282,17 @@ export function tenantClient(schoolId: string) {
             // --- Model A: Teacher (linked to User which has schoolId) ---
             if (model === "Teacher") {
               if (READ_OPERATIONS.has(operation)) {
-                (args as any).where = {
-                  ...(args as any).where,
-                  user: { ...((args as any).where?.user || {}), schoolId: cleanSchoolId },
+                args.where = {
+                  ...(args.where || {}),
+                  user: { ...(args.where?.user || {}), schoolId: cleanSchoolId },
                 };
                 return query(args);
               }
 
               if (operation === "findUnique" || operation === "findUniqueOrThrow") {
-                const whereClause = (args as any).where;
+                const whereClause = args.where;
                 const flat = flattenWhere(whereClause);
-                const teacherUser = await prisma.teacher.findFirst({
+                const teacherUser = await activeClient.teacher.findFirst({
                   where: { ...flat, user: { schoolId: cleanSchoolId } },
                   select: { id: true },
                 });
@@ -273,8 +309,8 @@ export function tenantClient(schoolId: string) {
               }
 
               if (operation === "update" || operation === "delete") {
-                const whereClause = (args as any).where;
-                const existing = await prisma.teacher.findFirst({
+                const whereClause = args.where;
+                const existing = await activeClient.teacher.findFirst({
                   where: { ...flattenWhere(whereClause), user: { schoolId: cleanSchoolId } },
                   select: { id: true },
                 });
@@ -288,17 +324,17 @@ export function tenantClient(schoolId: string) {
               }
 
               if (WRITE_WHERE_OPERATIONS.has(operation)) {
-                (args as any).where = {
-                  ...(args as any).where,
-                  user: { ...((args as any).where?.user || {}), schoolId: cleanSchoolId },
+                args.where = {
+                  ...(args.where || {}),
+                  user: { ...(args.where?.user || {}), schoolId: cleanSchoolId },
                 };
                 return query(args);
               }
 
               if (operation === "create") {
-                const userId = (args as any).data?.userId;
+                const userId = args.data?.userId;
                 if (userId) {
-                  const user = await prisma.user.findFirst({
+                  const user = await activeClient.user.findFirst({
                     where: { id: userId, schoolId: cleanSchoolId },
                     select: { id: true },
                   });
@@ -316,17 +352,17 @@ export function tenantClient(schoolId: string) {
             // --- Model B: Marks (linked to Student which has schoolId) ---
             if (model === "Marks") {
               if (READ_OPERATIONS.has(operation)) {
-                (args as any).where = {
-                  ...(args as any).where,
-                  student: { ...((args as any).where?.student || {}), schoolId: cleanSchoolId },
+                args.where = {
+                  ...(args.where || {}),
+                  student: { ...(args.where?.student || {}), schoolId: cleanSchoolId },
                 };
                 return query(args);
               }
 
               if (operation === "findUnique" || operation === "findUniqueOrThrow") {
-                const whereClause = (args as any).where;
+                const whereClause = args.where;
                 const flat = flattenWhere(whereClause);
-                const mark = await prisma.marks.findFirst({
+                const mark = await activeClient.marks.findFirst({
                   where: { ...flat, student: { schoolId: cleanSchoolId } },
                   select: { id: true },
                 });
@@ -343,8 +379,8 @@ export function tenantClient(schoolId: string) {
               }
 
               if (operation === "update" || operation === "delete") {
-                const whereClause = (args as any).where;
-                const existing = await prisma.marks.findFirst({
+                const whereClause = args.where;
+                const existing = await activeClient.marks.findFirst({
                   where: { ...flattenWhere(whereClause), student: { schoolId: cleanSchoolId } },
                   select: { id: true },
                 });
@@ -358,10 +394,10 @@ export function tenantClient(schoolId: string) {
               }
 
               if (operation === "upsert") {
-                const { where, create } = args as any;
+                const { where, create } = args;
                 const studentId = create?.studentId || (where as any)?.studentId_subjectId_examName?.studentId;
                 if (studentId) {
-                  const student = await prisma.student.findFirst({
+                  const student = await activeClient.student.findFirst({
                     where: { id: studentId, schoolId: cleanSchoolId },
                     select: { id: true },
                   });
@@ -373,32 +409,48 @@ export function tenantClient(schoolId: string) {
                   }
                 }
 
-                const unscoped = await prisma.marks.findFirst({
+                const unscoped = await (rootOrTx as any).marks.findFirst({
                   where: flattenWhere(where),
                   include: { student: { select: { schoolId: true } } },
                 });
-                if (unscoped && unscoped.student.schoolId !== cleanSchoolId) {
-                  throw new Prisma.PrismaClientKnownRequestError(
-                    "Record not found (tenant boundary)",
-                    { code: "P2025", clientVersion: Prisma.prismaVersion.client }
-                  );
+                if (unscoped) {
+                  const unscopedSchoolId = unscoped.student?.schoolId;
+                  if (unscopedSchoolId) {
+                    if (unscopedSchoolId !== cleanSchoolId) {
+                      throw new Prisma.PrismaClientKnownRequestError(
+                        "Record not found (tenant boundary)",
+                        { code: "P2025", clientVersion: Prisma.prismaVersion.client }
+                      );
+                    }
+                  } else if (unscoped.studentId) {
+                    const studentBelongs = await activeClient.student.findFirst({
+                      where: { id: unscoped.studentId, schoolId: cleanSchoolId },
+                      select: { id: true },
+                    });
+                    if (!studentBelongs) {
+                      throw new Prisma.PrismaClientKnownRequestError(
+                        "Record not found (tenant boundary)",
+                        { code: "P2025", clientVersion: Prisma.prismaVersion.client }
+                      );
+                    }
+                  }
                 }
 
                 return query(args);
               }
 
               if (WRITE_WHERE_OPERATIONS.has(operation)) {
-                (args as any).where = {
-                  ...(args as any).where,
-                  student: { ...((args as any).where?.student || {}), schoolId: cleanSchoolId },
+                args.where = {
+                  ...(args.where || {}),
+                  student: { ...(args.where?.student || {}), schoolId: cleanSchoolId },
                 };
                 return query(args);
               }
 
               if (operation === "create") {
-                const studentId = (args as any).data?.studentId;
+                const studentId = args.data?.studentId;
                 if (studentId) {
-                  const student = await prisma.student.findFirst({
+                  const student = await activeClient.student.findFirst({
                     where: { id: studentId, schoolId: cleanSchoolId },
                     select: { id: true },
                   });
@@ -416,17 +468,17 @@ export function tenantClient(schoolId: string) {
             // --- Model C: StudentParent (linked to Student & Parent) ---
             if (model === "StudentParent") {
               if (READ_OPERATIONS.has(operation) || WRITE_WHERE_OPERATIONS.has(operation)) {
-                (args as any).where = {
-                  ...(args as any).where,
-                  student: { ...((args as any).where?.student || {}), schoolId: cleanSchoolId },
+                args.where = {
+                  ...(args.where || {}),
+                  student: { ...(args.where?.student || {}), schoolId: cleanSchoolId },
                 };
                 return query(args);
               }
 
               if (operation === "create") {
-                const studentId = (args as any).data?.studentId;
+                const studentId = args.data?.studentId;
                 if (studentId) {
-                  const student = await prisma.student.findFirst({
+                  const student = await activeClient.student.findFirst({
                     where: { id: studentId, schoolId: cleanSchoolId },
                     select: { id: true },
                   });
@@ -444,17 +496,17 @@ export function tenantClient(schoolId: string) {
             // --- Model D: TeacherSubject (linked to Subject which has direct schoolId) ---
             if (model === "TeacherSubject") {
               if (READ_OPERATIONS.has(operation) || WRITE_WHERE_OPERATIONS.has(operation)) {
-                (args as any).where = {
-                  ...(args as any).where,
-                  subject: { ...((args as any).where?.subject || {}), schoolId: cleanSchoolId },
+                args.where = {
+                  ...(args.where || {}),
+                  subject: { ...(args.where?.subject || {}), schoolId: cleanSchoolId },
                 };
                 return query(args);
               }
 
               if (operation === "create" || operation === "upsert") {
-                const subjectId = (args as any).data?.subjectId || (args as any).create?.subjectId;
+                const subjectId = args.data?.subjectId || args.create?.subjectId;
                 if (subjectId) {
-                  const subject = await prisma.subject.findFirst({
+                  const subject = await activeClient.subject.findFirst({
                     where: { id: subjectId, schoolId: cleanSchoolId },
                     select: { id: true },
                   });
