@@ -10,12 +10,18 @@
     "lint": "eslint",
     "check:tenant-scoping": "ts-node scripts/check-tenant-scoping.ts",
     "test:tenant": "ts-node scripts/test-tenant-isolation.ts",
-    "test:auth": "ts-node scripts/test-login-auth.ts"
+    "test:security": "ts-node scripts/test-security-suite.ts",
+    "test:auth": "ts-node scripts/test-auth-regression.ts",
+    "test": "npm run check:tenant-scoping && npm run test:tenant && npm run test:security && npm run test:auth"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1156.0",
+    "@aws-sdk/s3-request-presigner": "^3.1156.0",
+    "@neon/config": "^1.11.3",
+    "@neon/env": "^1.6.15",
     "@prisma/client": "^6.19.3",
     "bcryptjs": "^3.0.3",
     "html2pdf.js": "^0.14.0",

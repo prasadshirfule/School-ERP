@@ -2,6 +2,12 @@ import { NextResponse } from "next/server";
 import { getRequiredSession, unauthorized } from "@/lib/utils";
 import { tenantClient } from "@/lib/tenant";
 import { getOrCreateExamSlots } from "@/lib/exam-slots";
+import { Attendance, ExamSlot, StudentParent } from "@prisma/client";
+
+interface SlotMaxInfo {
+  maxScore: number;
+  isVarying: boolean;
+}
 
 export async function GET(
   request: Request,
@@ -22,7 +28,7 @@ export async function GET(
       include: { students: true },
     });
 
-    if (!parent || !parent.students.some((sp) => sp.studentId === studentId)) {
+    if (!parent || !parent.students.some((sp: StudentParent) => sp.studentId === studentId)) {
       return NextResponse.json({ error: "Student not found" }, { status: 404 });
     }
   }
@@ -100,8 +106,8 @@ export async function GET(
   const examSlots = await getOrCreateExamSlots(schoolId, student.academicYear);
 
   // Group all slots
-  const t1Slots = examSlots.filter((s) => s.term === "TERM1").sort((a, b) => a.order - b.order);
-  const t2Slots = examSlots.filter((s) => s.term === "TERM2").sort((a, b) => a.order - b.order);
+  const t1Slots = examSlots.filter((s: ExamSlot) => s.term === "TERM1").sort((a: ExamSlot, b: ExamSlot) => a.order - b.order);
+  const t2Slots = examSlots.filter((s: ExamSlot) => s.term === "TERM2").sort((a: ExamSlot, b: ExamSlot) => a.order - b.order);
 
   // 5. Fetch all marks recorded for this student
   const marks = await db.marks.findMany({
@@ -143,11 +149,11 @@ export async function GET(
   };
 
   // Only render columns for exam slots that have marks entered for this student
-  const visibleT1Slots = hasAnyMarks ? t1Slots.filter((s) => isSlotActive(s.code)) : t1Slots;
-  const visibleT2Slots = hasAnyMarks ? t2Slots.filter((s) => isSlotActive(s.code)) : t2Slots;
+  const visibleT1Slots = hasAnyMarks ? t1Slots.filter((s: ExamSlot) => isSlotActive(s.code)) : t1Slots;
+  const visibleT2Slots = hasAnyMarks ? t2Slots.filter((s: ExamSlot) => isSlotActive(s.code)) : t2Slots;
 
   // Resolve maxScore per active slot from real Marks records (fallback to ExamSlot default)
-  const getSlotMaxInfo = (sCode: string, defaultMax: number) => {
+  const getSlotMaxInfo = (sCode: string, defaultMax: number): SlotMaxInfo => {
     const code = normalizeSlotCode(sCode);
     const recordedMaxes = slotMarksMap.get(code) || [];
     if (recordedMaxes.length === 0) {
@@ -160,11 +166,21 @@ export async function GET(
     };
   };
 
-  const t1SlotInfoMap = new Map(visibleT1Slots.map((s) => [s.code, getSlotMaxInfo(s.code, Number(s.maxScore))]));
-  const t2SlotInfoMap = new Map(visibleT2Slots.map((s) => [s.code, getSlotMaxInfo(s.code, Number(s.maxScore))]));
+  const t1SlotInfoMap = new Map<string, SlotMaxInfo>(
+    visibleT1Slots.map((s: ExamSlot) => [s.code, getSlotMaxInfo(s.code, Number(s.maxScore))])
+  );
+  const t2SlotInfoMap = new Map<string, SlotMaxInfo>(
+    visibleT2Slots.map((s: ExamSlot) => [s.code, getSlotMaxInfo(s.code, Number(s.maxScore))])
+  );
 
-  const t1Max = visibleT1Slots.reduce((acc, s) => acc + (t1SlotInfoMap.get(s.code)?.maxScore || Number(s.maxScore)), 0);
-  const t2Max = visibleT2Slots.reduce((acc, s) => acc + (t2SlotInfoMap.get(s.code)?.maxScore || Number(s.maxScore)), 0);
+  const t1Max = visibleT1Slots.reduce(
+    (acc: number, s: ExamSlot) => acc + (t1SlotInfoMap.get(s.code)?.maxScore || Number(s.maxScore)),
+    0
+  );
+  const t2Max = visibleT2Slots.reduce(
+    (acc: number, s: ExamSlot) => acc + (t2SlotInfoMap.get(s.code)?.maxScore || Number(s.maxScore)),
+    0
+  );
   const totalCombinedMaxPerSubject = t1Max + t2Max;
 
   // Group marks by subject with real scores and real maxScores
@@ -327,23 +343,23 @@ export async function GET(
   const t2Start = student.school.term2StartDate || defaultT2Start;
   const t2End = student.school.term2EndDate || defaultT2End;
 
-  const t1Records = attendanceRecords.filter((a) => {
+  const t1Records = attendanceRecords.filter((a: Attendance) => {
     const d = new Date(a.date);
     return d >= t1Start && d <= t1End;
   });
 
-  const t2Records = attendanceRecords.filter((a) => {
+  const t2Records = attendanceRecords.filter((a: Attendance) => {
     const d = new Date(a.date);
     return d >= t2Start && d <= t2End;
   });
 
   const t1WorkingDays = t1Records.length;
-  const t1PresentDays = t1Records.filter((a) => a.status === "PRESENT" || a.status === "LATE").length;
+  const t1PresentDays = t1Records.filter((a: Attendance) => a.status === "PRESENT" || a.status === "LATE").length;
   const t1AttendancePct =
     t1WorkingDays > 0 ? `${((t1PresentDays / t1WorkingDays) * 100).toFixed(1)}%` : "0.0%";
 
   const t2WorkingDays = t2Records.length;
-  const t2PresentDays = t2Records.filter((a) => a.status === "PRESENT" || a.status === "LATE").length;
+  const t2PresentDays = t2Records.filter((a: Attendance) => a.status === "PRESENT" || a.status === "LATE").length;
   const t2AttendancePct =
     t2WorkingDays > 0 ? `${((t2PresentDays / t2WorkingDays) * 100).toFixed(1)}%` : "0.0%";
 
@@ -388,13 +404,13 @@ export async function GET(
       school: student.school,
     },
     slots: {
-      term1: visibleT1Slots.map((s) => ({
+      term1: visibleT1Slots.map((s: ExamSlot) => ({
         code: s.code,
         name: s.name,
         maxScore: t1SlotInfoMap.get(s.code)?.maxScore || Number(s.maxScore),
         isVaryingMax: t1SlotInfoMap.get(s.code)?.isVarying || false,
       })),
-      term2: visibleT2Slots.map((s) => ({
+      term2: visibleT2Slots.map((s: ExamSlot) => ({
         code: s.code,
         name: s.name,
         maxScore: t2SlotInfoMap.get(s.code)?.maxScore || Number(s.maxScore),

@@ -18,6 +18,19 @@ export async function GET(
   const { id } = await params;
   if (!id) return badRequest("Student ID is required");
 
+  // If role is PARENT, verify parent is linked to this student
+  if (ctx.session.user.role === "PARENT") {
+    const parentLink = await ctx.db.studentParent.findFirst({
+      where: {
+        studentId: id,
+        parent: { userId: ctx.session.user.id },
+      },
+    });
+    if (!parentLink) {
+      return NextResponse.json({ error: "Student not found" }, { status: 404 });
+    }
+  }
+
   const student = await ctx.db.student.findFirst({
     where: { id },
     include: {
@@ -27,7 +40,11 @@ export async function GET(
       parents: {
         include: {
           parent: {
-            include: { user: true },
+            include: {
+              user: {
+                select: { id: true, email: true, phone: true, role: true },
+              },
+            },
           },
         },
       },
@@ -154,7 +171,11 @@ export async function PATCH(
       parents: {
         include: {
           parent: {
-            include: { user: true },
+            include: {
+              user: {
+                select: { id: true, email: true, phone: true, role: true },
+              },
+            },
           },
         },
       },

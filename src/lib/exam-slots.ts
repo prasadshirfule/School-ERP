@@ -1,4 +1,5 @@
 import { tenantClient } from "./tenant";
+import { ExamSlot } from "@prisma/client";
 
 export interface DefaultSlotDef {
   code: string;
@@ -21,12 +22,12 @@ export const DEFAULT_EXAM_SLOTS: DefaultSlotDef[] = [
  * Ensures a school has the 6 structured exam slots created for an academic year.
  * If none exist, auto-seeds them so teachers and report cards never hit a dead end.
  */
-export async function getOrCreateExamSlots(schoolId: string, academicYear: string) {
+export async function getOrCreateExamSlots(schoolId: string, academicYear: string): Promise<ExamSlot[]> {
   const db = tenantClient(schoolId);
-  const existing = await db.examSlot.findMany({
+  const existing = (await db.examSlot.findMany({
     where: { academicYear },
     orderBy: { order: "asc" },
-  });
+  })) as ExamSlot[];
 
   if (existing.length > 0) {
     return existing;
@@ -43,20 +44,21 @@ export async function getOrCreateExamSlots(schoolId: string, academicYear: strin
         },
       },
       create: {
+        schoolId,
         academicYear,
         code: slot.code,
         name: slot.name,
         term: slot.term,
         maxScore: slot.maxScore,
         order: slot.order,
-      } as any,
+      },
       update: {},
     });
   }
 
-  return db.examSlot.findMany({
+  return (await db.examSlot.findMany({
     where: { academicYear },
     orderBy: { order: "asc" },
-  });
+  })) as ExamSlot[];
 }
 

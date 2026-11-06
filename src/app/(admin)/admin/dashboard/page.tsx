@@ -1,6 +1,11 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { tenantClient } from "@/lib/tenant";
+import { Prisma, Notice } from "@prisma/client";
+
+type AdminRecentStudent = Prisma.StudentGetPayload<{
+  include: { section: { include: { class: true } } };
+}>;
 import {
   GraduationCap,
   School,
@@ -234,7 +239,7 @@ export default async function AdminDashboard() {
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-              {recentStudents.map((s) => (
+              {(recentStudents as AdminRecentStudent[]).map((s: AdminRecentStudent) => (
                 <div
                   key={s.id}
                   style={{
@@ -316,7 +321,7 @@ export default async function AdminDashboard() {
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-              {recentNotices.map((n) => (
+              {(recentNotices as Notice[]).map((n: Notice) => (
                 <div
                   key={n.id}
                   style={{

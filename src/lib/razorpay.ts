@@ -30,6 +30,7 @@ export const razorpayService = {
     const keyId = this.getKeyId();
     const keySecret = this.getKeySecret();
     const currency = params.currency || "INR";
+    const isProd = process.env.NODE_ENV === "production";
 
     // If live API credentials are provided and not default demo strings, attempt live Razorpay REST API call
     if (
@@ -63,13 +64,24 @@ export const razorpayService = {
             status: data.status,
             keyId,
           };
+        } else {
+          const errBody = await res.text().catch(() => "");
+          console.error("Razorpay order creation returned non-OK status:", res.status, errBody);
+          if (isProd) {
+            throw new Error(`Razorpay order creation failed with status ${res.status}`);
+          }
         }
       } catch (err) {
-        console.error("Razorpay live API call failed, falling back to mock sandbox order:", err);
+        console.error("Razorpay live API call failed:", err);
+        if (isProd) {
+          throw new Error("Payment gateway is temporarily unavailable in production. Please try again later.");
+        }
       }
+    } else if (isProd) {
+      throw new Error("Razorpay credentials are not configured for production payments.");
     }
 
-    // Mock / sandbox fallback order generation for development & offline testing
+    // Mock / sandbox fallback order generation for non-production development & offline testing only
     const mockOrderId = `order_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     return {
       id: mockOrderId,
@@ -87,11 +99,24 @@ export const razorpayService = {
     paymentId: string;
     signature: string;
   }): boolean {
+    const isProd = process.env.NODE_ENV === "production";
+
+    // In production, mock signatures are strictly forbidden
+    if (params.signature.startsWith("mock_sig_") || params.orderId.startsWith("order_")) {
+      if (isProd) {
+        return false;
+      }
+      // Allowed in development / test environments only
+      if (params.signature === `mock_sig_${params.paymentId}`) {
+        return true;
+      }
+    }
+
     const keySecret = this.getKeySecret();
-    
-    // In demo / sandbox mode with mock order IDs, validate simulated signatures
-    if (params.orderId.startsWith("order_") && params.signature === `mock_sig_${params.paymentId}`) {
-      return true;
+    if (!keySecret || keySecret.includes("demo_key")) {
+      if (isProd) {
+        return false;
+      }
     }
 
     try {

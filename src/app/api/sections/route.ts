@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getTenantDb, unauthorized, badRequest } from "@/lib/utils";
+import { getTenantDb, unauthorized, badRequest, forbidden, hasRole } from "@/lib/utils";
 import { SectionCreateSchema } from "@/lib/validations";
 
 export async function GET() {
@@ -26,8 +26,8 @@ export async function POST(request: Request) {
   const ctx = await getTenantDb();
   if (!ctx) return unauthorized();
 
-  if (ctx.session.user.role !== "ADMIN" && ctx.session.user.role !== "PRINCIPAL") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!hasRole(ctx.session, ["ADMIN", "PRINCIPAL"])) {
+    return forbidden();
   }
 
   const body = await request.json().catch(() => ({}));
@@ -37,6 +37,20 @@ export async function POST(request: Request) {
   }
 
   const { classId, name, academicYear, classTeacherId } = parsed.data;
+
+  // Verify classId belongs to this school
+  const classRecord = await ctx.db.class.findUnique({ where: { id: classId } });
+  if (!classRecord) {
+    return badRequest("Class not found in this school");
+  }
+
+  // Verify classTeacherId belongs to this school if provided
+  if (classTeacherId) {
+    const teacher = await ctx.db.teacher.findUnique({ where: { id: classTeacherId } });
+    if (!teacher) {
+      return badRequest("Class teacher not found in this school");
+    }
+  }
 
   try {
     const section = await ctx.db.section.create({
@@ -65,8 +79,8 @@ export async function PATCH(request: Request) {
   const ctx = await getTenantDb();
   if (!ctx) return unauthorized();
 
-  if (ctx.session.user.role !== "ADMIN" && ctx.session.user.role !== "PRINCIPAL") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!hasRole(ctx.session, ["ADMIN", "PRINCIPAL"])) {
+    return forbidden();
   }
 
   const body = await request.json();
@@ -78,7 +92,15 @@ export async function PATCH(request: Request) {
 
   const updateData: Record<string, any> = {};
   if (name !== undefined) updateData.name = name.trim();
-  if (classTeacherId !== undefined) updateData.classTeacherId = classTeacherId || null;
+  if (classTeacherId !== undefined) {
+    if (classTeacherId) {
+      const teacher = await ctx.db.teacher.findUnique({ where: { id: classTeacherId } });
+      if (!teacher) {
+        return badRequest("Class teacher not found in this school");
+      }
+    }
+    updateData.classTeacherId = classTeacherId || null;
+  }
 
   if (Object.keys(updateData).length === 0) {
     return badRequest("Nothing to update — provide name or classTeacherId");
@@ -110,8 +132,8 @@ export async function DELETE(request: Request) {
   const ctx = await getTenantDb();
   if (!ctx) return unauthorized();
 
-  if (ctx.session.user.role !== "ADMIN" && ctx.session.user.role !== "PRINCIPAL") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!hasRole(ctx.session, ["ADMIN", "PRINCIPAL"])) {
+    return forbidden();
   }
 
   const body = await request.json();

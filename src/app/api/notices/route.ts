@@ -1,15 +1,19 @@
 import { NextResponse } from "next/server";
-import { getTenantDb, unauthorized, badRequest } from "@/lib/utils";
+import { getTenantDb, unauthorized, badRequest, forbidden, hasRole } from "@/lib/utils";
 
 export async function GET(request: Request) {
   const ctx = await getTenantDb();
   if (!ctx) return unauthorized();
 
+  const userRole = ctx.session.user.role;
   const { searchParams } = new URL(request.url);
   const forRole = searchParams.get("role");
 
   const where: any = {};
-  if (forRole) {
+  if (userRole !== "ADMIN" && userRole !== "PRINCIPAL") {
+    // Non-admins can only see notices directed to their role
+    where.audience = { has: userRole };
+  } else if (forRole) {
     where.audience = { has: forRole };
   }
 
@@ -25,8 +29,8 @@ export async function POST(request: Request) {
   const ctx = await getTenantDb();
   if (!ctx) return unauthorized();
 
-  if (ctx.session.user.role !== "ADMIN" && ctx.session.user.role !== "PRINCIPAL") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!hasRole(ctx.session, ["ADMIN", "PRINCIPAL"])) {
+    return forbidden();
   }
 
   const body = await request.json();

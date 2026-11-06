@@ -14,6 +14,18 @@ export async function GET() {
     dbStatus = "unhealthy";
   }
 
+  const isProd = process.env.NODE_ENV === "production";
+
+  if (isProd) {
+    return NextResponse.json(
+      {
+        status: dbStatus === "healthy" ? "ok" : "degraded",
+        timestamp: new Date().toISOString(),
+      },
+      { status: dbStatus === "healthy" ? 200 : 503 }
+    );
+  }
+
   const memoryUsage = process.memoryUsage();
 
   return NextResponse.json(

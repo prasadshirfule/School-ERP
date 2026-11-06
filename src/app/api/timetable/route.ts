@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getTenantDb, unauthorized, badRequest } from "@/lib/utils";
+import { getTenantDb, unauthorized, badRequest, forbidden, hasRole } from "@/lib/utils";
 
 const VALID_DAYS = ["MON", "TUE", "WED", "THU", "FRI", "SAT"];
 
@@ -37,6 +37,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const ctx = await getTenantDb();
   if (!ctx) return unauthorized();
+  if (!hasRole(ctx.session, ["ADMIN", "PRINCIPAL"])) return forbidden();
 
   const body = await request.json().catch(() => ({}));
   const sectionId = typeof body.sectionId === "string" ? body.sectionId.trim() : "";
@@ -50,10 +51,26 @@ export async function POST(request: Request) {
   if (!VALID_DAYS.includes(dayOfWeek)) return badRequest("Invalid dayOfWeek. Use MON-SAT");
   if (!periodId) return badRequest("periodId is required");
 
+  // Verify section belongs to current tenant
+  const section = await ctx.db.section.findUnique({ where: { id: sectionId } });
+  if (!section) return badRequest("Section not found");
+
   // Verify period exists and is not a break
   const period = await ctx.db.period.findUnique({ where: { id: periodId } });
   if (!period) return badRequest("Period not found");
   if (period.isBreak) return badRequest("Cannot assign subjects to break periods");
+
+  // Verify subject if provided
+  if (subjectId) {
+    const subject = await ctx.db.subject.findUnique({ where: { id: subjectId } });
+    if (!subject) return badRequest("Subject not found");
+  }
+
+  // Verify teacher if provided
+  if (teacherId) {
+    const teacher = await ctx.db.teacher.findUnique({ where: { id: teacherId } });
+    if (!teacher) return badRequest("Teacher not found");
+  }
 
   // Timetable Conflict Detection: ensure teacher is not double-booked on same day + period
   if (teacherId) {
@@ -116,6 +133,7 @@ export async function POST(request: Request) {
 export async function DELETE(request: Request) {
   const ctx = await getTenantDb();
   if (!ctx) return unauthorized();
+  if (!hasRole(ctx.session, ["ADMIN", "PRINCIPAL"])) return forbidden();
 
   const { searchParams } = new URL(request.url);
   const id = searchParams.get("id") || "";

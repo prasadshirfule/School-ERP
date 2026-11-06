@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getTenantDb, unauthorized, badRequest } from "@/lib/utils";
+import { getTenantDb, unauthorized, badRequest, forbidden, hasRole } from "@/lib/utils";
 
 /**
  * GET /api/syllabus?classId=X&subjectId=Y&academicYear=Z
@@ -35,6 +35,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const ctx = await getTenantDb();
   if (!ctx) return unauthorized();
+  if (!hasRole(ctx.session, ["ADMIN", "PRINCIPAL", "TEACHER"])) return forbidden();
 
   const body = await request.json().catch(() => ({}));
   const classId = typeof body.classId === "string" ? body.classId.trim() : "";
@@ -45,6 +46,12 @@ export async function POST(request: Request) {
 
   if (!classId || !subjectId) return badRequest("classId and subjectId are required");
   if (!topicTitle) return badRequest("Topic title is required");
+
+  // Verify class and subject belong to tenant
+  const classExists = await ctx.db.class.findUnique({ where: { id: classId } });
+  if (!classExists) return badRequest("Class not found");
+  const subjectExists = await ctx.db.subject.findUnique({ where: { id: subjectId } });
+  if (!subjectExists) return badRequest("Subject not found");
 
   // Auto-assign next order
   const last = await ctx.db.syllabusTopic.findFirst({
@@ -74,6 +81,7 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
   const ctx = await getTenantDb();
   if (!ctx) return unauthorized();
+  if (!hasRole(ctx.session, ["ADMIN", "PRINCIPAL", "TEACHER"])) return forbidden();
 
   const body = await request.json().catch(() => ({}));
   const id = typeof body.id === "string" ? body.id.trim() : "";
@@ -105,6 +113,7 @@ export async function PATCH(request: Request) {
 export async function DELETE(request: Request) {
   const ctx = await getTenantDb();
   if (!ctx) return unauthorized();
+  if (!hasRole(ctx.session, ["ADMIN", "PRINCIPAL", "TEACHER"])) return forbidden();
 
   const { searchParams } = new URL(request.url);
   const id = searchParams.get("id") || "";

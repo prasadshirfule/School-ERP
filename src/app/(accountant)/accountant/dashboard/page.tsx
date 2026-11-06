@@ -1,6 +1,18 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { tenantClient } from "@/lib/tenant";
+import { Prisma } from "@prisma/client";
+
+type AccountantRecentPayment = Prisma.PaymentGetPayload<{
+  include: {
+    invoice: {
+      include: {
+        student: true;
+        feeStructure: true;
+      };
+    };
+  };
+}>;
 import {
   AlertCircle,
   Clock,
@@ -171,7 +183,7 @@ export default async function AccountantDashboard() {
                 </tr>
               </thead>
               <tbody>
-                {recentPayments.map((p) => (
+                {(recentPayments as AccountantRecentPayment[]).map((p: AccountantRecentPayment) => (
                   <tr key={p.id}>
                     <td style={{ fontFamily: "monospace", fontWeight: 700, color: "var(--primary)" }}>
                       {p.receiptNumber}

@@ -194,7 +194,7 @@ export default function CommunicationsPage() {
                 value={audience}
                 onChange={(e) => setAudience(e.target.value)}
               >
-                <option value="ABSENTEES_TODAY">🚨 Today's Absentees (Attendance Cross-Reference)</option>
+                <option value="ABSENTEES_TODAY">🚨 Today&apos;s Absentees (Attendance Cross-Reference)</option>
                 <option value="FEE_DEFAULTERS">💰 Fee Defaulters (Overdue / Unpaid Invoices)</option>
                 <option value="CLASS_SECTION">🏫 Specific Class & Section</option>
                 <option value="ALL_PARENTS">📢 All Enrolled Students & Parents</option>

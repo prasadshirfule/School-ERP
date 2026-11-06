@@ -1,6 +1,11 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { tenantClient } from "@/lib/tenant";
+import { Prisma, Notice } from "@prisma/client";
+
+type TeacherDashboardSection = Prisma.SectionGetPayload<{
+  include: { class: true };
+}>;
 import {
   CheckCircle2,
   ArrowRight,
@@ -168,7 +173,7 @@ export default async function TeacherDashboard() {
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "10px" }}>
-            {sections.map((sec) => (
+            {(sections as TeacherDashboardSection[]).map((sec: TeacherDashboardSection) => (
               <Link
                 key={sec.id}
                 href={`/teacher/attendance?sectionId=${sec.id}`}
@@ -215,7 +220,7 @@ export default async function TeacherDashboard() {
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-              {notices.map((n) => (
+              {(notices as Notice[]).map((n: Notice) => (
                 <div
                   key={n.id}
                   style={{

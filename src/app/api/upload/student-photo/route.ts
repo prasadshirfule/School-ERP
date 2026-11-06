@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { getRequiredSession, unauthorized, badRequest } from "@/lib/utils";
-import { storage } from "@/lib/storage";
+import { getRequiredSession, unauthorized, badRequest, forbidden, hasRole } from "@/lib/utils";
+import { storage, validateFileMagicBytes } from "@/lib/storage";
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const ALLOWED_MIME_TYPES = new Set([
@@ -14,12 +14,8 @@ export async function POST(request: Request) {
   const session = await getRequiredSession();
   if (!session) return unauthorized();
 
-  if (
-    session.user.role !== "ADMIN" &&
-    session.user.role !== "PRINCIPAL" &&
-    session.user.role !== "TEACHER"
-  ) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!hasRole(session, ["ADMIN", "PRINCIPAL", "TEACHER"])) {
+    return forbidden();
   }
 
   try {
@@ -50,18 +46,24 @@ export async function POST(request: Request) {
       );
     }
 
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    // Validate binary magic bytes to prevent spoofed MIME uploads
+    if (!validateFileMagicBytes(buffer, "image")) {
+      return badRequest("File content does not match a valid image format signature.");
+    }
+
     const rawType = (formData.get("type") as string) || "";
     const isLogo = rawType === "logo" || rawType === "school" || Boolean(formData.get("logo"));
     const folder = isLogo ? "logos" : "photos";
-
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
 
     const result = await storage.upload({
       buffer,
       filename: file.name || (isLogo ? "school-logo.png" : "student-photo.png"),
       folder,
       contentType: mimeType,
+      schoolId: session.user.schoolId,
     });
 
     return NextResponse.json({

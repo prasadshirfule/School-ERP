@@ -122,8 +122,6 @@ export default function TeacherMarksPage() {
   // When Section, Subject, or ExamSlot changes, fetch student marks grid
   useEffect(() => {
     if (!sectionId || !subjectId || !selectedSlotCode) {
-      setRows([]);
-      setInitialRows([]);
       return;
     }
 
@@ -145,12 +143,12 @@ export default function TeacherMarksPage() {
           const currentSlot = examSlots.find((s) => s.code === selectedSlotCode);
           const fallbackMax = currentSlot ? String(currentSlot.maxScore) : defaultMaxScore;
 
-          const formatted: StudentMarkRow[] = data.map((r: any) => ({
-            studentId: r.studentId,
-            rollNumber: r.rollNumber || "",
-            admissionNo: r.admissionNo,
-            fullName: r.fullName,
-            markId: r.markId || null,
+          const formatted: StudentMarkRow[] = (data as Array<Record<string, unknown>>).map((r) => ({
+            studentId: String(r.studentId),
+            rollNumber: r.rollNumber ? String(r.rollNumber) : "",
+            admissionNo: String(r.admissionNo),
+            fullName: String(r.fullName),
+            markId: r.markId ? String(r.markId) : null,
             score: r.score !== null && r.score !== undefined ? String(r.score) : "",
             maxScore:
               r.maxScore !== null && r.maxScore !== undefined
@@ -405,8 +403,9 @@ export default function TeacherMarksPage() {
         setMessage(`Exam assessment slot "${data.name}" updated successfully.`);
         setIsError(false);
       }
-    } catch (err: any) {
-      setSlotModalError(err.message || "Failed to save exam slot");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to save exam slot";
+      setSlotModalError(msg);
     } finally {
       setSavingSlot(false);
     }
@@ -496,8 +495,9 @@ export default function TeacherMarksPage() {
         setRows(formatted);
         setInitialRows(formatted);
       }
-    } catch (err: any) {
-      setMessage(err.message || "Failed to save marks");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to save marks";
+      setMessage(msg);
       setIsError(true);
     } finally {
       setSaving(false);
@@ -605,7 +605,7 @@ export default function TeacherMarksPage() {
             </div>
             {subjects.length === 0 && !loadingOptions && (
               <span style={{ fontSize: "11.5px", color: "var(--text-muted)", marginTop: "4px", display: "block" }}>
-                No subjects assigned yet. Click "+ Add new subject..." to create one.
+                No subjects assigned yet. Click &quot;+ Add new subject...&quot; to create one.
               </span>
             )}
           </div>

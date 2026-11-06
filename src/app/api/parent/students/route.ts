@@ -1,5 +1,16 @@
 import { NextResponse } from "next/server";
 import { getTenantDb, unauthorized } from "@/lib/utils";
+import { Prisma } from "@prisma/client";
+
+type ParentStudentItem = Prisma.StudentParentGetPayload<{
+  include: {
+    student: {
+      include: {
+        section: { include: { class: true } };
+      };
+    };
+  };
+}>;
 
 /** GET: returns students linked to the current parent user */
 export async function GET() {
@@ -31,7 +42,7 @@ export async function GET() {
     return NextResponse.json([]);
   }
 
-  const students = parent.students.map((sp) => ({
+  const students = (parent.students as ParentStudentItem[]).map((sp: ParentStudentItem) => ({
     ...sp.student,
     relationship: sp.relationship,
     isPrimary: sp.isPrimary,

@@ -101,11 +101,13 @@ npm run prisma:seed # or: npx prisma db seed
 
 ### 4. Run Test Suites
 ```bash
-# Verify tenant scoping drift guard (all 21 models)
-npm run check:tenant-scoping
+# Run all automated test suites (Tenant Scoping Guard, Isolation, Security, RBAC, PII)
+npm test
 
-# Run 29-point tenant isolation regression suite
-npm run test:tenant
+# Or individually:
+npm run check:tenant-scoping # Introspects Prisma DMMF (21 direct + 4 relational models)
+npm run test:tenant          # 29-point multi-tenant isolation regression test
+npm run test:security        # 29-point PII encryption, Razorpay, rate limiting, and RBAC suite
 ```
 
 ### 5. Start Development Server
@@ -116,7 +118,8 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ---
 
-## 🔑 Demo Credentials (Password: `password123` for all)
+## 🔑 Local Development Demo Credentials (Local Dev / Disposable Seed Only)
+> **Security Notice**: These sample credentials apply strictly to local development seeds created with `RESET_DB=true`. Production databases MUST never be seeded with demo accounts or default shared passwords.
 
 | Tenant School | Role | Email |
 | :--- | :--- | :--- |

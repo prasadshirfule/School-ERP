@@ -58,23 +58,33 @@ export default function ClassesPage() {
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  const fetchClasses = useCallback(async () => {
+  const fetchClasses = async () => {
     const res = await fetch("/api/classes");
     const data = await res.json();
-    setClasses(data);
+    setClasses(Array.isArray(data) ? data : []);
     setLoading(false);
-  }, []);
-
-  const fetchTeachers = useCallback(async () => {
-    const res = await fetch("/api/teachers");
-    const data = await res.json();
-    setTeachers(data);
-  }, []);
+  };
 
   useEffect(() => {
-    fetchClasses();
-    fetchTeachers();
-  }, [fetchClasses, fetchTeachers]);
+    let ignore = false;
+    Promise.all([
+      fetch("/api/classes").then((r) => r.json()),
+      fetch("/api/teachers").then((r) => r.json()),
+    ])
+      .then(([classesData, teachersData]) => {
+        if (!ignore) {
+          setClasses(Array.isArray(classesData) ? classesData : []);
+          setTeachers(Array.isArray(teachersData) ? teachersData : []);
+          setLoading(false);
+        }
+      })
+      .catch(() => {
+        if (!ignore) setLoading(false);
+      });
+    return () => {
+      ignore = true;
+    };
+  }, []);
 
   // Update section drafts when section count changes
   const handleSectionCountChange = (count: number) => {
@@ -153,7 +163,7 @@ export default function ClassesPage() {
         <div>
           <h1 className="page-title">Classes & Sections</h1>
           <p className="page-subtitle">
-            Organize your school's academic grades and manage sections within each class
+            Organize your school&apos;s academic grades and manage sections within each class
           </p>
         </div>
         <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>

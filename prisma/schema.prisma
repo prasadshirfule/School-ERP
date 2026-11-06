@@ -3,8 +3,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("NEON_DATABASE_URL")
+  directUrl = env("NEON_DATABASE_URL_UNPOOLED")
 }
 
 // ------------------------------------------------------------
@@ -101,6 +102,8 @@ model Teacher {
   sections  Section[] @relation("ClassTeacher")
   timetableSlots TimetableSlot[]
   assignments Assignment[]
+
+  @@index([departmentId])
 }
 
 // ------------------------------------------------------------
@@ -161,6 +164,7 @@ model TeacherSubject {
   subject   Subject @relation(fields: [subjectId], references: [id])
 
   @@id([teacherId, subjectId])
+  @@index([subjectId])
 }
 
 // ------------------------------------------------------------
@@ -227,6 +231,8 @@ model Parent {
   phone    String
 
   students StudentParent[]
+
+  @@index([schoolId])
 }
 
 // Explicit join table — handles multiple guardians per student
@@ -240,6 +246,7 @@ model StudentParent {
   isPrimary    Boolean @default(false) // who gets billed / primary contact
 
   @@id([studentId, parentId])
+  @@index([parentId])
 }
 
 // ------------------------------------------------------------
@@ -285,6 +292,8 @@ model FeeStructure {
   frequency    String   // "MONTHLY" | "QUARTERLY" | "ANNUAL" | "ONE_TIME"
 
   invoices FeeInvoice[]
+
+  @@index([schoolId])
 }
 
 enum InvoiceStatus {
@@ -312,6 +321,7 @@ model FeeInvoice {
   payments Payment[]
 
   @@index([schoolId, studentId, status])
+  @@index([feeStructureId])
 }
 
 model Payment {
@@ -328,6 +338,7 @@ model Payment {
 
   @@unique([schoolId, receiptNumber])
   @@index([gatewayRef])
+  @@index([invoiceId])
 }
 
 // ------------------------------------------------------------
@@ -399,6 +410,8 @@ model Notice {
   body      String
   audience  Role[]   // which roles see this notice
   createdAt DateTime @default(now())
+
+  @@index([schoolId])
 }
 
 // ------------------------------------------------------------
@@ -438,6 +451,7 @@ model TimetableSlot {
 
   @@unique([sectionId, dayOfWeek, periodId, academicYear])
   @@index([schoolId, sectionId])
+  @@index([teacherId])
 }
 
 // ------------------------------------------------------------
@@ -549,4 +563,5 @@ model Assignment {
 
   @@index([schoolId, sectionId])
   @@index([schoolId, teacherId])
+  @@index([subjectId])
 }

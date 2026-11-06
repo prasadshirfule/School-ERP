@@ -1,14 +1,12 @@
 import { NextResponse } from "next/server";
-import { getRequiredSession, unauthorized } from "@/lib/utils";
+import { getRequiredSession, unauthorized, forbidden } from "@/lib/utils";
 import { tenantClient } from "@/lib/tenant";
 import { formatDate } from "@/lib/formatDate";
 
 /**
  * PDF Receipt Generator
  * 
- * @react-pdf/renderer is installed on-demand in this feature.
- * Returns a simple HTML receipt as a downloadable page for now.
- * When @react-pdf/renderer is installed, this will generate a proper PDF.
+ * Returns a simple HTML receipt as a printable page.
  */
 export async function GET(
   request: Request,
@@ -16,6 +14,10 @@ export async function GET(
 ) {
   const session = await getRequiredSession();
   if (!session) return unauthorized();
+
+  if (session.user.role === "TEACHER") {
+    return forbidden("Teachers cannot access fee receipts");
+  }
 
   const { id } = await params;
   const db = tenantClient(session.user.schoolId);
@@ -35,6 +37,23 @@ export async function GET(
 
   if (!payment) {
     return NextResponse.json({ error: "Payment not found" }, { status: 404 });
+  }
+
+  // If PARENT: ensure the payment belongs to one of their linked children
+  if (session.user.role === "PARENT") {
+    const parent = await db.parent.findUnique({
+      where: { userId: session.user.id },
+      include: {
+        students: {
+          select: { studentId: true },
+        },
+      },
+    });
+
+    const childIds = parent?.students.map((c: any) => c.studentId) || [];
+    if (!childIds.includes(payment.invoice.studentId)) {
+      return NextResponse.json({ error: "Payment not found" }, { status: 404 });
+    }
   }
 
   // Generate HTML receipt (works without @react-pdf/renderer)

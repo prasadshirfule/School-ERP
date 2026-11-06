@@ -769,11 +769,11 @@ export default function NewStudentPage() {
           {/* Father's Info */}
           <div style={{ marginBottom: "18px" }}>
             <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "10px" }}>
-              Father's Details
+              Father&apos;s Details
             </div>
             <div className="form-row">
               <div className="form-group">
-                <label className="form-label">Father's Name</label>
+                <label className="form-label">Father&apos;s Name</label>
                 <input
                   className="form-input"
                   type="text"
@@ -808,11 +808,11 @@ export default function NewStudentPage() {
           {/* Mother's Info */}
           <div style={{ marginBottom: "18px" }}>
             <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "10px" }}>
-              Mother's Details
+              Mother&apos;s Details
             </div>
             <div className="form-row">
               <div className="form-group">
-                <label className="form-label">Mother's Name</label>
+                <label className="form-label">Mother&apos;s Name</label>
                 <input
                   className="form-input"
                   type="text"
@@ -851,7 +851,7 @@ export default function NewStudentPage() {
             </div>
             <div className="form-row">
               <div className="form-group">
-                <label className="form-label">Guardian's Name</label>
+                <label className="form-label">Guardian&apos;s Name</label>
                 <input
                   className="form-input"
                   type="text"

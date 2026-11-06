@@ -1,6 +1,15 @@
 import { NextResponse } from "next/server";
 import { getTenantDb, unauthorized } from "@/lib/utils";
 
+interface SyllabusTopicStatItem {
+  id: string;
+  isCompleted: boolean;
+  classId: string;
+  subjectId: string;
+  class: { name: string };
+  subject: { name: string };
+}
+
 /**
  * GET /api/syllabus/stats?academicYear=Z
  * Returns syllabus completion stats per class/subject for the dashboard.
@@ -26,7 +35,7 @@ export async function GET(request: Request) {
 
   // Aggregate by class+subject
   const map = new Map<string, { className: string; subjectName: string; total: number; completed: number }>();
-  for (const t of topics) {
+  for (const t of (topics as SyllabusTopicStatItem[])) {
     const key = `${t.classId}::${t.subjectId}`;
     if (!map.has(key)) {
       map.set(key, {
@@ -48,7 +57,9 @@ export async function GET(request: Request) {
 
   // Overall
   const totalTopics = topics.length;
-  const completedTopics = topics.filter((t) => t.isCompleted).length;
+  const completedTopics = (topics as SyllabusTopicStatItem[]).filter(
+    (t: SyllabusTopicStatItem) => t.isCompleted
+  ).length;
   const overallPercentage = totalTopics > 0 ? Math.round((completedTopics / totalTopics) * 100) : 0;
 
   return NextResponse.json({

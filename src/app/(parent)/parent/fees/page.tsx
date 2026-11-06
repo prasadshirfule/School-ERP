@@ -101,12 +101,26 @@ function FeesContent() {
     setPayAmount(balance);
   };
 
+  const loadRazorpayScript = (): Promise<boolean> => {
+    return new Promise((resolve) => {
+      if (typeof window !== "undefined" && (window as any).Razorpay) {
+        resolve(true);
+        return;
+      }
+      const script = document.createElement("script");
+      script.src = "https://checkout.razorpay.com/v1/checkout.js";
+      script.onload = () => resolve(true);
+      script.onerror = () => resolve(false);
+      document.body.appendChild(script);
+    });
+  };
+
   const handleProcessPayment = async () => {
     if (!payingInvoice || payAmount <= 0) return;
     setIsProcessing(true);
 
     try {
-      // 1. Create Razorpay order
+      // 1. Create Razorpay order on server
       const orderRes = await fetch("/api/payments/razorpay/create-order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -121,36 +135,106 @@ function FeesContent() {
         throw new Error(orderData.error || "Failed to create payment order");
       }
 
-      // 2. Simulate Razorpay payment gateway response (or handle live callback)
-      const mockPaymentId = `pay_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-      const mockSignature = `mock_sig_${mockPaymentId}`;
+      // Offline development sandbox fallback: ONLY allowed when server returns isMock=true
+      if (orderData.isMock) {
+        const mockPaymentId = `pay_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+        const mockSignature = `mock_sig_${mockPaymentId}`;
 
-      // 3. Verify Payment and execute atomic invoice update
-      const verifyRes = await fetch("/api/payments/razorpay/verify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          orderId: orderData.orderId,
-          paymentId: mockPaymentId,
-          signature: mockSignature,
-          invoiceId: payingInvoice.id,
-          amount: payAmount,
-        }),
+        const verifyRes = await fetch("/api/payments/razorpay/verify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            orderId: orderData.orderId,
+            paymentId: mockPaymentId,
+            signature: mockSignature,
+            invoiceId: payingInvoice.id,
+            amount: payAmount,
+          }),
+        });
+
+        const verifyData = await verifyRes.json();
+        if (!verifyRes.ok) {
+          throw new Error(verifyData.error || "Payment verification failed");
+        }
+
+        addToast("info", "Development Mode: Sandbox payment recorded successfully.");
+        setPayingInvoice(null);
+        if (selectedStudentId) {
+          fetchInvoices(selectedStudentId);
+        }
+        setIsProcessing(false);
+        return;
+      }
+
+      // 2. Load official Razorpay Checkout SDK for live/test checkout
+      const scriptLoaded = await loadRazorpayScript();
+      if (!scriptLoaded) {
+        throw new Error("Unable to load Razorpay payment gateway. Please check your internet connection.");
+      }
+
+      const options = {
+        key: orderData.keyId,
+        amount: orderData.amount,
+        currency: orderData.currency || "INR",
+        name: "School ERP",
+        description: `Fee Payment - ${payingInvoice.feeStructure.name}`,
+        order_id: orderData.orderId,
+        handler: async function (response: {
+          razorpay_payment_id: string;
+          razorpay_order_id: string;
+          razorpay_signature: string;
+        }) {
+          try {
+            setIsProcessing(true);
+            const verifyRes = await fetch("/api/payments/razorpay/verify", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                orderId: response.razorpay_order_id,
+                paymentId: response.razorpay_payment_id,
+                signature: response.razorpay_signature,
+                invoiceId: payingInvoice.id,
+                amount: payAmount,
+              }),
+            });
+
+            const verifyData = await verifyRes.json();
+            if (!verifyRes.ok) {
+              throw new Error(verifyData.error || "Payment signature verification failed");
+            }
+
+            addToast("success", `Payment of ₹${payAmount.toLocaleString("en-IN")} successful!`);
+            setPayingInvoice(null);
+            if (selectedStudentId) {
+              fetchInvoices(selectedStudentId);
+            }
+          } catch (verifyErr: any) {
+            addToast("error", verifyErr.message || "Payment verification failed");
+          } finally {
+            setIsProcessing(false);
+          }
+        },
+        prefill: {
+          name: selectedStudent?.fullName || "",
+        },
+        theme: {
+          color: "#1e3a8a",
+        },
+        modal: {
+          ondismiss: function () {
+            setIsProcessing(false);
+          },
+        },
+      };
+
+      const rzp = new (window as any).Razorpay(options);
+      rzp.on("payment.failed", function (response: any) {
+        setIsProcessing(false);
+        addToast("error", response.error?.description || "Payment failed");
       });
-
-      const verifyData = await verifyRes.json();
-      if (!verifyRes.ok) {
-        throw new Error(verifyData.error || "Payment verification failed");
-      }
-
-      addToast("success", `Payment of ₹${payAmount.toLocaleString("en-IN")} successful!`);
-      setPayingInvoice(null);
-      if (selectedStudentId) {
-        fetchInvoices(selectedStudentId);
-      }
+      rzp.open();
     } catch (err: any) {
       addToast("error", err.message || "Payment transaction failed");
-    } finally {
       setIsProcessing(false);
     }
   };
