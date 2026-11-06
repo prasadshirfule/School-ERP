@@ -1,8 +1,21 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
-import { Role } from "@prisma/client";
 import { getAuthSecret } from "./lib/env";
+
+/**
+ * Lightweight, Edge-safe Role definitions mirroring the Prisma enum
+ * without pulling the heavy @prisma/client runtime and WASM query engine into middleware.
+ */
+const Role = {
+  ADMIN: "ADMIN",
+  PRINCIPAL: "PRINCIPAL",
+  TEACHER: "TEACHER",
+  PARENT: "PARENT",
+  ACCOUNTANT: "ACCOUNTANT",
+} as const;
+
+type Role = (typeof Role)[keyof typeof Role];
 
 /**
  * Route-to-role mapping. Each URL prefix is restricted to
