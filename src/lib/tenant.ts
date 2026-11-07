@@ -108,7 +108,11 @@ export function tenantClient(schoolId: string, baseClient?: any) {
           try {
             if (this && typeof Prisma?.getExtensionContext === "function") {
               const ctx = Prisma.getExtensionContext(this);
-              if (ctx) activeClient = ctx;
+              if (ctx && typeof ctx.user?.findFirst === "function") {
+                activeClient = ctx;
+              } else if (ctx && ctx.$parent && typeof ctx.$parent.user?.findFirst === "function") {
+                activeClient = ctx.$parent;
+              }
             }
           } catch {
             activeClient = rootOrTx;

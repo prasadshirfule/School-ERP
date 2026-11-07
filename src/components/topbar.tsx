@@ -1,7 +1,7 @@
 "use client";
 
 import { signOut, useSession } from "next-auth/react";
-import { LogOut, User, Menu, Building } from "lucide-react";
+import { LogOut, User, Menu, Building, Calendar } from "lucide-react";
 import GlobalSearch from "@/components/GlobalSearch";
 
 interface TopbarProps {
@@ -12,6 +12,8 @@ interface TopbarProps {
 export default function Topbar({ onToggleMobile, collapsed = false }: TopbarProps) {
   const { data: session } = useSession();
   const schoolName = session?.user?.schoolName || "Institutional ERP";
+  const userRole = session?.user?.role || "USER";
+  const displayName = session?.user?.name || session?.user?.email || "User";
 
   return (
     <header className={`topbar ${collapsed ? "topbar-expanded" : ""}`}>
@@ -27,7 +29,11 @@ export default function Topbar({ onToggleMobile, collapsed = false }: TopbarProp
         <div className="topbar-school-badge">
           <Building size={16} color="var(--primary)" />
           <span>{schoolName}</span>
-          <span className="topbar-school-tag">Live Session</span>
+        </div>
+
+        <div className="topbar-ay-badge hidden sm:inline-flex" title="Current Academic Session">
+          <Calendar size={13} />
+          <span>AY 2026-27</span>
         </div>
       </div>
 
@@ -37,7 +43,12 @@ export default function Topbar({ onToggleMobile, collapsed = false }: TopbarProp
             <GlobalSearch />
             <div className="topbar-user hidden md:inline-flex">
               <User size={14} style={{ color: "var(--primary)" }} />
-              <span>{session.user.email}</span>
+              <span style={{ maxWidth: "160px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {displayName}
+              </span>
+              <span className={`topbar-role-tag sidebar-role-${userRole}`}>
+                {userRole}
+              </span>
             </div>
             <button
               onClick={() => {

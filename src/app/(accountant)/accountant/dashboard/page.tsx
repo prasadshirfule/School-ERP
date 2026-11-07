@@ -2,6 +2,23 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { tenantClient } from "@/lib/tenant";
 import { Prisma } from "@prisma/client";
+import ModuleTile from "@/components/ui/ModuleTile";
+import {
+  AlertCircle,
+  Clock,
+  CheckCircle2,
+  CreditCard,
+  ArrowRight,
+  PlusCircle,
+  Receipt,
+  FileSpreadsheet,
+  Calendar,
+  Zap,
+  Building2,
+} from "lucide-react";
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { formatDecimal, formatDate } from "@/lib/utils";
 
 type AccountantRecentPayment = Prisma.PaymentGetPayload<{
   include: {
@@ -13,19 +30,6 @@ type AccountantRecentPayment = Prisma.PaymentGetPayload<{
     };
   };
 }>;
-import {
-  AlertCircle,
-  Clock,
-  CheckCircle2,
-  CreditCard,
-  ArrowRight,
-  PlusCircle,
-  Receipt,
-  FileSpreadsheet,
-} from "lucide-react";
-import Link from "next/link";
-import { redirect } from "next/navigation";
-import { formatDecimal, formatDate } from "@/lib/utils";
 
 export default async function AccountantDashboard() {
   const session = await getServerSession(authOptions);
@@ -54,116 +58,184 @@ export default async function AccountantDashboard() {
     }),
   ]);
 
+  const currentHour = new Date().getHours();
+  let greeting = "Good Morning";
+  if (currentHour >= 12 && currentHour < 17) {
+    greeting = "Good Afternoon";
+  } else if (currentHour >= 17) {
+    greeting = "Good Evening";
+  }
+
+  const displayName = session.user.name || session.user.email?.split("@")[0] || "Accountant";
+
   return (
     <div>
-      {/* Breadcrumbs */}
+      {/* Breadcrumbs Navigation */}
       <div className="breadcrumbs">
         <span>Workspace</span>
         <span className="breadcrumb-separator">/</span>
         <span className="breadcrumb-current">Accounts & Finance</span>
       </div>
 
-      {/* Header */}
-      <div className="page-header">
+      {/* Welcome Hero Banner (Template 3) */}
+      <div className="welcome-banner">
         <div>
-          <h1 className="page-title">Accounts & Fee Collection</h1>
-          <p className="page-subtitle">
-            Track student fee structures, outstanding balances, collection receipts, and reconciliations.
+          <h1 className="welcome-title">
+            {greeting}, {displayName}!
+          </h1>
+          <p className="welcome-subtitle">
+            Financial Ledger & Fee Collection • Track student fee demands, receipts, and reconciliations.
           </p>
         </div>
-        <div style={{ display: "flex", gap: "10px" }}>
-          <Link href="/accountant/payments" className="btn btn-primary">
+        <div className="welcome-badge-group">
+          <div className="topbar-ay-badge">
+            <Calendar size={13} />
+            <span>Academic Session 2026-27</span>
+          </div>
+        </div>
+      </div>
+
+      {/* 4 Summary Stat Cards */}
+      <div className="dashboard-stats-grid">
+        <Link href="/accountant/invoices" className="stat-card-simple">
+          <div className="stat-card-simple-header">
+            <span className="stat-card-simple-label">Unpaid Demands</span>
+            <div className="module-tile-icon-wrap module-tile-icon-rose" style={{ width: "34px", height: "34px" }}>
+              <AlertCircle size={18} />
+            </div>
+          </div>
+          <div className="stat-card-simple-value" style={{ color: "var(--danger-text)" }}>
+            {unpaid}
+          </div>
+          <div className="stat-card-simple-sub">Pending student fee invoices</div>
+        </Link>
+
+        <Link href="/accountant/invoices" className="stat-card-simple">
+          <div className="stat-card-simple-header">
+            <span className="stat-card-simple-label">Partially Paid</span>
+            <div className="module-tile-icon-wrap module-tile-icon-amber" style={{ width: "34px", height: "34px" }}>
+              <Clock size={18} />
+            </div>
+          </div>
+          <div className="stat-card-simple-value" style={{ color: "var(--warning-text)" }}>
+            {partial}
+          </div>
+          <div className="stat-card-simple-sub">Invoices with partial payments</div>
+        </Link>
+
+        <Link href="/accountant/invoices" className="stat-card-simple">
+          <div className="stat-card-simple-header">
+            <span className="stat-card-simple-label">Settled In Full</span>
+            <div className="module-tile-icon-wrap module-tile-icon-emerald" style={{ width: "34px", height: "34px" }}>
+              <CheckCircle2 size={18} />
+            </div>
+          </div>
+          <div className="stat-card-simple-value" style={{ color: "var(--success-text)" }}>
+            {paid}
+          </div>
+          <div className="stat-card-simple-sub">Fully cleared fee invoices</div>
+        </Link>
+
+        <Link href="/accountant/payments" className="stat-card-simple">
+          <div className="stat-card-simple-header">
+            <span className="stat-card-simple-label">Receipts Issued</span>
+            <div className="module-tile-icon-wrap module-tile-icon-indigo" style={{ width: "34px", height: "34px" }}>
+              <CreditCard size={18} />
+            </div>
+          </div>
+          <div className="stat-card-simple-value">
+            {totalPayments}
+          </div>
+          <div className="stat-card-simple-sub">Total fee collection transactions</div>
+        </Link>
+      </div>
+
+      {/* Quick Actions Bar */}
+      <div className="quick-actions-bar">
+        <div className="quick-actions-title">
+          <Zap size={14} color="var(--primary)" />
+          <span>Quick Actions</span>
+        </div>
+        <div className="quick-actions-grid">
+          <Link href="/accountant/payments" className="quick-action-btn quick-action-btn-primary">
             <PlusCircle size={15} />
             <span>Record Payment</span>
           </Link>
-          <Link href="/accountant/invoices" className="btn btn-secondary">
+          <Link href="/accountant/invoices" className="quick-action-btn">
             <FileSpreadsheet size={15} />
-            <span>Fee Invoices</span>
+            <span>Manage Fee Invoices</span>
+          </Link>
+          <Link href="/admin/alerts" className="quick-action-btn">
+            <AlertCircle size={15} />
+            <span>Fee Alerts & Overdues</span>
           </Link>
         </div>
       </div>
 
-      {/* Primary Metrics Grid */}
-      <div className="stats-grid">
-        <Link href="/accountant/invoices" style={{ textDecoration: "none" }}>
-          <div className="stat-card">
-            <div className="stat-icon-wrap stat-icon-rose">
-              <AlertCircle size={22} />
-            </div>
-            <div className="stat-info">
-              <span className="stat-label">Unpaid Demands</span>
-              <span className="stat-value" style={{ color: "var(--danger-text)" }}>
-                {unpaid}
-              </span>
-            </div>
-          </div>
-        </Link>
+      {/* Section Header: Finance Modules */}
+      <div className="dashboard-section-header">
+        <div className="dashboard-section-title">
+          <Building2 size={18} color="var(--primary)" />
+          <span>Finance Modules</span>
+          <span className="dashboard-section-subtitle">Click any module to open</span>
+        </div>
+      </div>
 
-        <Link href="/accountant/invoices" style={{ textDecoration: "none" }}>
-          <div className="stat-card">
-            <div className="stat-icon-wrap stat-icon-amber">
-              <Clock size={22} />
-            </div>
-            <div className="stat-info">
-              <span className="stat-label">Partially Paid</span>
-              <span className="stat-value" style={{ color: "var(--warning-text)" }}>
-                {partial}
-              </span>
-            </div>
-          </div>
-        </Link>
+      {/* Primary Module Tiles (Template 3) */}
+      <div className="module-tile-grid">
+        <ModuleTile
+          title="Fee Invoices"
+          description="Create fee demands, manage student fee structures, and check payment status"
+          icon="Receipt"
+          href="/accountant/invoices"
+          colorScheme="amber"
+          badge={`${unpaid} Unpaid`}
+        />
 
-        <Link href="/accountant/invoices" style={{ textDecoration: "none" }}>
-          <div className="stat-card">
-            <div className="stat-icon-wrap stat-icon-emerald">
-              <CheckCircle2 size={22} />
-            </div>
-            <div className="stat-info">
-              <span className="stat-label">Settled In Full</span>
-              <span className="stat-value" style={{ color: "var(--success-text)" }}>
-                {paid}
-              </span>
-            </div>
-          </div>
-        </Link>
+        <ModuleTile
+          title="Payment Receipts"
+          description="Log cash, UPI, or card payments, and print official fee receipts"
+          icon="CreditCard"
+          href="/accountant/payments"
+          colorScheme="emerald"
+          badge={`${totalPayments} Receipts`}
+        />
 
-        <Link href="/accountant/payments" style={{ textDecoration: "none" }}>
-          <div className="stat-card">
-            <div className="stat-icon-wrap stat-icon-indigo">
-              <CreditCard size={22} />
-            </div>
-            <div className="stat-info">
-              <span className="stat-label">Receipts Issued</span>
-              <span className="stat-value">{totalPayments}</span>
-            </div>
-          </div>
+        <ModuleTile
+          title="Fee Alerts & Reminders"
+          description="Send automated fee reminder notifications to parents with overdue balances"
+          icon="AlertCircle"
+          href="/admin/alerts"
+          colorScheme="rose"
+        />
+      </div>
+
+      {/* Section Header: Recent Receipts */}
+      <div className="dashboard-section-header">
+        <div className="dashboard-section-title">
+          <Receipt size={18} color="var(--primary)" />
+          <span>Recent Fee Receipts</span>
+          <span className="dashboard-section-subtitle">Real-time payment audit log</span>
+        </div>
+        <Link
+          href="/accountant/payments"
+          style={{
+            fontSize: "12.5px",
+            fontWeight: 600,
+            color: "var(--primary)",
+            textDecoration: "none",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "4px",
+          }}
+        >
+          <span>All Payments</span>
+          <ArrowRight size={13} />
         </Link>
       </div>
 
       {/* Recent Receipts Table */}
       <div className="card">
-        <div className="card-header">
-          <div>
-            <h2 className="card-title">Recent Fee Receipts</h2>
-            <p className="card-subtitle">Real-time payment audit log</p>
-          </div>
-          <Link
-            href="/accountant/payments"
-            style={{
-              fontSize: "12.5px",
-              fontWeight: 600,
-              color: "var(--primary)",
-              textDecoration: "none",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "4px",
-            }}
-          >
-            <span>All Payments</span>
-            <ArrowRight size={13} />
-          </Link>
-        </div>
-
         {recentPayments.length === 0 ? (
           <div className="empty-state">
             <div className="empty-state-title">No payment records found</div>

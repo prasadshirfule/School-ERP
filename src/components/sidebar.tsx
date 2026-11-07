@@ -28,6 +28,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ShieldCheck,
+  FileSpreadsheet,
 } from "lucide-react";
 
 type NavItem = {
@@ -44,100 +45,133 @@ type NavGroup = {
 const NAV_GROUPS: Record<string, NavGroup[]> = {
   ADMIN: [
     {
-      title: "Overview",
+      title: "HOME",
       items: [
         { label: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
       ],
     },
     {
-      title: "Students & Admissions",
+      title: "STUDENTS",
       items: [
-        { label: "Student Roster", href: "/admin/students", icon: GraduationCap },
+        { label: "Student Directory", href: "/admin/students", icon: Users },
         { label: "New Admission", href: "/admin/students/new", icon: UserPlus },
+        { label: "Print ID Cards", href: "/admin/id-cards", icon: CreditCard },
         { label: "Student Promotion", href: "/admin/promotion", icon: UserCheck },
-        { label: "ID Card Studio", href: "/admin/id-cards", icon: CreditCard },
       ],
     },
     {
-      title: "Academics",
+      title: "STAFF",
       items: [
-        { label: "Classes & Sections", href: "/admin/classes", icon: School },
-        { label: "Timetable Schedule", href: "/admin/timetable", icon: CalendarClock },
-        { label: "Syllabus Tracker", href: "/admin/syllabus", icon: BookOpen },
-      ],
-    },
-    {
-      title: "Staff & Organization",
-      items: [
-        { label: "Teachers & Staff", href: "/admin/teachers", icon: Users },
-        { label: "Departments", href: "/admin/departments", icon: Building2 },
+        { label: "Teachers Directory", href: "/admin/teachers", icon: GraduationCap },
+        { label: "Add Teacher", href: "/admin/teachers/new", icon: UserPlus },
         { label: "Leave Requests", href: "/admin/leave", icon: Calendar },
+        { label: "Departments", href: "/admin/departments", icon: Building2 },
       ],
     },
     {
-      title: "Records & Communications",
+      title: "CLASSES & TIMETABLE",
       items: [
-        { label: "Transfer Certificates", href: "/admin/certificates", icon: FileCheck },
-        { label: "Communications Hub", href: "/admin/communications", icon: Send },
-        { label: "Notice Board", href: "/admin/notices", icon: Megaphone },
+        { label: "Take Attendance", href: "/admin/attendance", icon: CheckCircle2 },
+        { label: "Classes & Sections", href: "/admin/classes", icon: School },
+        { label: "Weekly Timetable", href: "/admin/timetable", icon: CalendarClock },
+        { label: "Syllabus Progress", href: "/admin/syllabus", icon: BookOpen },
+      ],
+    },
+    {
+      title: "FEES",
+      items: [
+        { label: "Fee Invoices", href: "/accountant/invoices", icon: Receipt },
+        { label: "Payment Receipts", href: "/accountant/payments", icon: CreditCard },
         { label: "Fee Alerts", href: "/admin/alerts", icon: Bell },
       ],
     },
     {
-      title: "System",
+      title: "NOTICES",
       items: [
-        { label: "School Settings", href: "/admin/settings", icon: Settings },
+        { label: "Notice Board", href: "/admin/notices", icon: Megaphone },
+        { label: "Broadcast Announcement", href: "/admin/communications", icon: Send },
+      ],
+    },
+    {
+      title: "REPORTS",
+      items: [
+        { label: "School Reports Hub", href: "/admin/reports", icon: FileSpreadsheet },
+        { label: "Transfer Certificates (TC)", href: "/admin/certificates", icon: FileCheck },
+      ],
+    },
+    {
+      title: "SETTINGS",
+      items: [
+        { label: "School Profile & Setup", href: "/admin/settings", icon: Settings },
       ],
     },
   ],
   PRINCIPAL: [
     {
-      title: "Overview",
+      title: "HOME",
       items: [
         { label: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
       ],
     },
     {
-      title: "Students & Admissions",
+      title: "STUDENTS",
       items: [
-        { label: "Student Roster", href: "/admin/students", icon: GraduationCap },
+        { label: "Student Directory", href: "/admin/students", icon: Users },
+        { label: "New Admission", href: "/admin/students/new", icon: UserPlus },
+        { label: "Print ID Cards", href: "/admin/id-cards", icon: CreditCard },
         { label: "Student Promotion", href: "/admin/promotion", icon: UserCheck },
-        { label: "ID Card Studio", href: "/admin/id-cards", icon: CreditCard },
       ],
     },
     {
-      title: "Academics",
+      title: "STAFF",
       items: [
-        { label: "Classes & Sections", href: "/admin/classes", icon: School },
-        { label: "Timetable Schedule", href: "/admin/timetable", icon: CalendarClock },
-        { label: "Syllabus Tracker", href: "/admin/syllabus", icon: BookOpen },
-      ],
-    },
-    {
-      title: "Staff & Organization",
-      items: [
-        { label: "Teachers & Staff", href: "/admin/teachers", icon: Users },
-        { label: "Departments", href: "/admin/departments", icon: Building2 },
+        { label: "Teachers Directory", href: "/admin/teachers", icon: GraduationCap },
+        { label: "Add Teacher", href: "/admin/teachers/new", icon: UserPlus },
         { label: "Leave Requests", href: "/admin/leave", icon: Calendar },
+        { label: "Departments", href: "/admin/departments", icon: Building2 },
       ],
     },
     {
-      title: "Records & Notices",
+      title: "CLASSES & TIMETABLE",
       items: [
-        { label: "Transfer Certificates", href: "/admin/certificates", icon: FileCheck },
+        { label: "Take Attendance", href: "/admin/attendance", icon: CheckCircle2 },
+        { label: "Classes & Sections", href: "/admin/classes", icon: School },
+        { label: "Weekly Timetable", href: "/admin/timetable", icon: CalendarClock },
+        { label: "Syllabus Progress", href: "/admin/syllabus", icon: BookOpen },
+      ],
+    },
+    {
+      title: "FEES",
+      items: [
+        { label: "Fee Invoices", href: "/accountant/invoices", icon: Receipt },
+        { label: "Payment Receipts", href: "/accountant/payments", icon: CreditCard },
+        { label: "Fee Alerts", href: "/admin/alerts", icon: Bell },
+      ],
+    },
+    {
+      title: "NOTICES",
+      items: [
         { label: "Notice Board", href: "/admin/notices", icon: Megaphone },
+        { label: "Broadcast Announcement", href: "/admin/communications", icon: Send },
       ],
     },
     {
-      title: "System",
+      title: "REPORTS",
       items: [
-        { label: "School Settings", href: "/admin/settings", icon: Settings },
+        { label: "School Reports Hub", href: "/admin/reports", icon: FileSpreadsheet },
+        { label: "Transfer Certificates (TC)", href: "/admin/certificates", icon: FileCheck },
+      ],
+    },
+    {
+      title: "SETTINGS",
+      items: [
+        { label: "School Profile & Setup", href: "/admin/settings", icon: Settings },
       ],
     },
   ],
   TEACHER: [
     {
-      title: "Workspace",
+      title: "DAILY WORK",
       items: [
         { label: "Dashboard", href: "/teacher/dashboard", icon: LayoutDashboard },
         { label: "Daily Attendance", href: "/teacher/attendance", icon: CheckCircle2 },
@@ -146,14 +180,14 @@ const NAV_GROUPS: Record<string, NavGroup[]> = {
       ],
     },
     {
-      title: "Academic Schedule",
+      title: "ACADEMICS",
       items: [
         { label: "My Timetable", href: "/teacher/timetable", icon: CalendarClock },
         { label: "Syllabus Progress", href: "/teacher/syllabus", icon: BookOpen },
       ],
     },
     {
-      title: "Self Service",
+      title: "ADMINISTRATION",
       items: [
         { label: "Leave Application", href: "/teacher/leave", icon: Calendar },
       ],
@@ -161,24 +195,36 @@ const NAV_GROUPS: Record<string, NavGroup[]> = {
   ],
   ACCOUNTANT: [
     {
-      title: "Financial Workspace",
+      title: "DAILY WORK",
       items: [
         { label: "Accounts Overview", href: "/accountant/dashboard", icon: LayoutDashboard },
+      ],
+    },
+    {
+      title: "FINANCE",
+      items: [
         { label: "Fee Invoices", href: "/accountant/invoices", icon: Receipt },
         { label: "Payment Receipts", href: "/accountant/payments", icon: CreditCard },
+        { label: "Fee Alerts", href: "/admin/alerts", icon: Bell },
       ],
     },
   ],
   PARENT: [
     {
-      title: "Family Portal",
+      title: "DAILY WORK",
       items: [
         { label: "Parent Dashboard", href: "/parent/dashboard", icon: LayoutDashboard },
+        { label: "School Notices", href: "/parent/notices", icon: Megaphone },
+      ],
+    },
+    {
+      title: "PEOPLE",
+      items: [
         { label: "My Children", href: "/parent/students", icon: GraduationCap },
       ],
     },
     {
-      title: "Academics & Attendance",
+      title: "ACADEMICS",
       items: [
         { label: "Daily Attendance", href: "/parent/attendance", icon: CheckCircle2 },
         { label: "Report Cards", href: "/parent/report-cards", icon: Award },
@@ -188,10 +234,9 @@ const NAV_GROUPS: Record<string, NavGroup[]> = {
       ],
     },
     {
-      title: "Fees & Announcements",
+      title: "FINANCE",
       items: [
         { label: "Fees & Invoices", href: "/parent/fees", icon: Receipt },
-        { label: "School Notices", href: "/parent/notices", icon: Megaphone },
       ],
     },
   ],
