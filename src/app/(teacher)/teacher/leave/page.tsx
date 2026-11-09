@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Calendar, Plus, Clock, CheckCircle2, XCircle, AlertCircle, Sparkles, X, Save, FileText } from "lucide-react";
+import { Calendar, Plus, CheckCircle2, AlertCircle, Sparkles, X, Save } from "lucide-react";
 
 type LeaveRequest = {
   id: string;
@@ -82,8 +82,8 @@ export default function TeacherLeavePage() {
       setSuccessMsg("Leave application submitted successfully for administrator review.");
       setTimeout(() => setSuccessMsg(""), 4000);
       fetchMyLeaves();
-    } catch (err: any) {
-      setError(err.message || "Failed to submit leave application");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to submit leave application");
     } finally {
       setSubmitting(false);
     }

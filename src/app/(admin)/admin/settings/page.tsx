@@ -192,9 +192,9 @@ export default function SchoolSettingsPage() {
       } else {
         setLogoError(data.error || "Failed to upload logo");
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setUploadingLogo(false);
-      setLogoError(err.message || "Failed to upload logo");
+      setLogoError(err instanceof Error ? err.message : "Failed to upload logo");
     }
   };
 
@@ -244,9 +244,9 @@ export default function SchoolSettingsPage() {
         setMessage(data.error || "Failed to update school settings");
         setIsError(true);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setSaving(false);
-      setMessage(err.message || "An unexpected error occurred");
+      setMessage(err instanceof Error ? err.message : "An unexpected error occurred");
       setIsError(true);
     }
   };
@@ -260,13 +260,13 @@ export default function SchoolSettingsPage() {
   }
 
   return (
-    <div style={{ maxWidth: "850px", margin: "0 auto", paddingBottom: "60px" }}>
+    <div className="office-page-container" style={{ maxWidth: "900px" }}>
       {/* ─── Page Header ─── */}
-      <div className="page-header">
+      <div className="office-header">
         <div>
-          <h1 className="page-title">School Settings & Profile</h1>
-          <p className="page-subtitle">
-            Configure institutional details, branding, affiliation credentials, and academic term attendance dates.
+          <h1 className="office-title">School Settings & Profile</h1>
+          <p className="office-subtitle">
+            Configure institutional details, branding, affiliation credentials, and daily bell schedule.
           </p>
         </div>
       </div>

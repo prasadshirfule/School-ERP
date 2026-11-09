@@ -43,6 +43,24 @@ type NavGroup = {
 };
 
 const NAV_GROUPS: Record<string, NavGroup[]> = {
+  SUPER_ADMIN: [
+    {
+      title: "PLATFORM GOVERNANCE",
+      items: [
+        { label: "Platform Dashboard", href: "/super-admin/dashboard", icon: LayoutDashboard },
+        { label: "Schools Directory", href: "/super-admin/dashboard#schools", icon: School },
+        { label: "Registration Requests", href: "/super-admin/dashboard#requests", icon: UserPlus },
+        { label: "Subscriptions & Plans", href: "/super-admin/dashboard#subscriptions", icon: CreditCard },
+        { label: "Platform Audit Logs", href: "/super-admin/dashboard#audit", icon: ShieldCheck },
+      ],
+    },
+    {
+      title: "SECURITY & ACCESS",
+      items: [
+        { label: "MFA & Credentials", href: "/super-admin/mfa-setup", icon: ShieldCheck },
+      ],
+    },
+  ],
   ADMIN: [
     {
       title: "HOME",
@@ -55,6 +73,7 @@ const NAV_GROUPS: Record<string, NavGroup[]> = {
       items: [
         { label: "Student Directory", href: "/admin/students", icon: Users },
         { label: "New Admission", href: "/admin/students/new", icon: UserPlus },
+        { label: "Parent Link Requests", href: "/admin/parent-links", icon: UserCheck },
         { label: "Print ID Cards", href: "/admin/id-cards", icon: CreditCard },
         { label: "Student Promotion", href: "/admin/promotion", icon: UserCheck },
       ],
@@ -103,6 +122,8 @@ const NAV_GROUPS: Record<string, NavGroup[]> = {
       title: "SETTINGS",
       items: [
         { label: "School Profile & Setup", href: "/admin/settings", icon: Settings },
+        { label: "Subscription & Billing", href: "/admin/subscription", icon: CreditCard },
+        { label: "Data Export & Retention", href: "/admin/export", icon: FileSpreadsheet },
       ],
     },
   ],
@@ -118,6 +139,7 @@ const NAV_GROUPS: Record<string, NavGroup[]> = {
       items: [
         { label: "Student Directory", href: "/admin/students", icon: Users },
         { label: "New Admission", href: "/admin/students/new", icon: UserPlus },
+        { label: "Parent Link Requests", href: "/admin/parent-links", icon: UserCheck },
         { label: "Print ID Cards", href: "/admin/id-cards", icon: CreditCard },
         { label: "Student Promotion", href: "/admin/promotion", icon: UserCheck },
       ],
@@ -166,6 +188,8 @@ const NAV_GROUPS: Record<string, NavGroup[]> = {
       title: "SETTINGS",
       items: [
         { label: "School Profile & Setup", href: "/admin/settings", icon: Settings },
+        { label: "Subscription & Billing", href: "/admin/subscription", icon: CreditCard },
+        { label: "Data Export & Retention", href: "/admin/export", icon: FileSpreadsheet },
       ],
     },
   ],

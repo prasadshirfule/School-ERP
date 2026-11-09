@@ -63,7 +63,7 @@ export async function POST(request: Request) {
       filename: file.name || (isLogo ? "school-logo.png" : "student-photo.png"),
       folder,
       contentType: mimeType,
-      schoolId: session.user.schoolId,
+      schoolId: session.user.schoolId || undefined,
     });
 
     return NextResponse.json({
@@ -72,8 +72,9 @@ export async function POST(request: Request) {
       size: file.size,
       mimeType,
     });
-  } catch (error: any) {
-    return badRequest(error.message || "Failed to process image upload");
+  } catch (error: unknown) {
+    const errorMsg = error instanceof Error ? error.message : "Failed to process image upload";
+    return badRequest(errorMsg);
   }
 }
 

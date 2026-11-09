@@ -283,7 +283,7 @@ async function runTests() {
   const { baseClient } = createMockPrismaClient(initialData);
 
   // Bind tenantClient directly to baseClient
-  const clientA = tenantClient(schoolA, baseClient);
+  const clientA: any = tenantClient(schoolA, baseClient);
 
   console.log("--- TEST GROUP 1: Tenant Isolation Smoke Test ---");
 
@@ -392,7 +392,7 @@ async function runTests() {
   assert(explicitSchoolIdRejected, "Upsert with caller-supplied create.schoolId is rejected immediately");
 
   console.log("\n--- TEST GROUP 3: Schema Drift Guard Verification ---");
-  assert(TENANT_SCOPED_MODELS.size === 21, "TENANT_SCOPED_MODELS contains all 21 tenant-scoped models");
+  assert(TENANT_SCOPED_MODELS.size === 25, "TENANT_SCOPED_MODELS contains all 25 tenant-scoped models");
 
   console.log("\n--- TEST GROUP 4: Marks Upsert Isolation & Regression Tests ---");
 

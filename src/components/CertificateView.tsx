@@ -25,7 +25,7 @@ interface CertificateData {
     affiliationNumber?: string | null;
     trustName?: string | null;
   };
-  fields: Record<string, any>;
+  fields: Record<string, string | undefined>;
 }
 
 interface Props {
@@ -239,7 +239,7 @@ export default function CertificateView({ data, onClose }: Props) {
                     </div>
                   </div>
                   <p style={{ marginTop: "18px" }}>
-                    The student's character and conduct during the stay in this institution were found to be{" "}
+                    The student&apos;s character and conduct during the stay in this institution were found to be{" "}
                     <strong>{fields.conductRemark || "Good"}</strong>.
                   </p>
                 </div>
@@ -273,7 +273,7 @@ export default function CertificateView({ data, onClose }: Props) {
                     </div>
                   </div>
                   <p style={{ marginTop: "18px" }}>
-                    During the period of study, the student's character and conduct were found to be{" "}
+                    During the period of study, the student&apos;s character and conduct were found to be{" "}
                     <strong>{fields.conductRemark || "Good"}</strong>. We wish the student all the best in future endeavours.
                   </p>
                 </div>

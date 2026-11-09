@@ -165,8 +165,8 @@ async function runSecuritySuite() {
   console.log("\n--- 4. Multi-Tenant Relational & Model Coverage ---");
 
   assert(
-    TENANT_SCOPED_MODELS.size === 21,
-    `All 21 direct schoolId models are registered (got ${TENANT_SCOPED_MODELS.size})`
+    TENANT_SCOPED_MODELS.size === 25,
+    `All 25 direct schoolId models are registered (got ${TENANT_SCOPED_MODELS.size})`
   );
   assert(
     RELATIONALLY_SCOPED_MODELS.size === 4,

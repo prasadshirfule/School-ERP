@@ -8,6 +8,7 @@ import { getAuthSecret } from "./lib/env";
  * without pulling the heavy @prisma/client runtime and WASM query engine into middleware.
  */
 const Role = {
+  SUPER_ADMIN: "SUPER_ADMIN",
   ADMIN: "ADMIN",
   PRINCIPAL: "PRINCIPAL",
   TEACHER: "TEACHER",
@@ -23,6 +24,7 @@ type Role = (typeof Role)[keyof typeof Role];
  * they are redirected to /login.
  */
 const ROLE_ROUTES: Record<string, Role[]> = {
+  "/super-admin": [Role.SUPER_ADMIN],
   "/admin": [Role.ADMIN, Role.PRINCIPAL],
   "/teacher": [Role.TEACHER],
   "/parent": [Role.PARENT],
@@ -30,10 +32,21 @@ const ROLE_ROUTES: Record<string, Role[]> = {
 };
 
 /** Routes that don't require authentication */
-const PUBLIC_PATHS = ["/login", "/api/auth", "/api/schools", "/api/health"];
+const PUBLIC_PATHS = [
+  "/login",
+  "/request-access",
+  "/parent-signup",
+  "/verify-email",
+  "/api/auth",
+  "/api/schools",
+  "/api/parent/register",
+  "/api/parent/verify-email",
+  "/api/health",
+];
 
 /** Role-based default dashboards for redirect after login */
 const ROLE_DASHBOARDS: Record<Role, string> = {
+  [Role.SUPER_ADMIN]: "/super-admin/dashboard",
   [Role.ADMIN]: "/admin/dashboard",
   [Role.PRINCIPAL]: "/admin/dashboard",
   [Role.TEACHER]: "/teacher/dashboard",
@@ -108,6 +121,27 @@ export async function middleware(request: NextRequest) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("callbackUrl", pathname);
     return NextResponse.redirect(loginUrl);
+  }
+
+  // Restricted Session Gating: Unenrolled Super Admin must complete MFA enrollment
+  if (token.role === Role.SUPER_ADMIN && (!token.mfaEnrolled || token.isRestricted)) {
+    const isMfaAllowedPath =
+      pathname === "/super-admin/mfa-setup" ||
+      pathname.startsWith("/api/super-admin/mfa") ||
+      pathname.startsWith("/api/auth");
+
+    if (!isMfaAllowedPath) {
+      if (pathname.startsWith("/api/")) {
+        return NextResponse.json(
+          {
+            error: "MFA_ENROLLMENT_REQUIRED",
+            message: "Platform Super Admin must complete MFA enrollment before accessing administrative controls.",
+          },
+          { status: 403 }
+        );
+      }
+      return NextResponse.redirect(new URL("/super-admin/mfa-setup", request.url));
+    }
   }
 
   // Root path → redirect to role dashboard

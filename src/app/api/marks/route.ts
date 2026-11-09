@@ -36,7 +36,7 @@ export async function GET(request: Request) {
 
   // Return distinct exam names for autocomplete
   if (examsOnly) {
-    const studentWhere: any = {};
+    const studentWhere: { sectionId?: string } = {};
     if (sectionId) {
       studentWhere.sectionId = sectionId;
     }
@@ -50,7 +50,7 @@ export async function GET(request: Request) {
       orderBy: { examName: "asc" },
     });
 
-    return NextResponse.json(marks.map((m: any) => m.examName));
+    return NextResponse.json(marks.map((m: { examName: string }) => m.examName));
   }
 
   if (!sectionId || !subjectId || !examName) {
@@ -92,7 +92,7 @@ export async function GET(request: Request) {
     },
   });
 
-  const studentIds = students.map((s: any) => s.id);
+  const studentIds = students.map((s) => s.id);
 
   // 4. Get existing marks for these students in this subject and exam
   const existingMarks = await ctx.db.marks.findMany({
@@ -112,7 +112,7 @@ export async function GET(request: Request) {
     });
   }
 
-  const result = students.map((student: any) => ({
+  const result = students.map((student) => ({
     studentId: student.id,
     admissionNo: student.admissionNo,
     fullName: student.fullName,
@@ -181,7 +181,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Teacher profile not found" }, { status: 403 });
     }
 
-    const isAssigned = teacher.subjects.some((ts: any) => ts.subjectId === subjectId);
+    const isAssigned = teacher.subjects.some((ts) => ts.subjectId === subjectId);
     if (!isAssigned) {
       return NextResponse.json(
         { error: "You are not authorized to enter marks for this subject" },
@@ -201,7 +201,7 @@ export async function POST(request: Request) {
     select: { id: true },
   });
 
-  const validStudentIdSet = new Set(validStudents.map((s: any) => s.id));
+  const validStudentIdSet = new Set(validStudents.map((s) => s.id));
   const invalidStudents = studentIds.filter((id) => !validStudentIdSet.has(id));
   if (invalidStudents.length > 0) {
     return badRequest("One or more students do not belong to the selected section");
@@ -234,7 +234,7 @@ export async function POST(request: Request) {
     });
   });
 
-  const results = await (ctx.db as any).$transaction(upsertOps);
+  const results = await (ctx.db as unknown as { $transaction: (ops: unknown[]) => Promise<unknown[]> }).$transaction(upsertOps);
 
   return NextResponse.json({
     success: true,

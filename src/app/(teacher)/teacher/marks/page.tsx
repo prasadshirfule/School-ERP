@@ -2,18 +2,12 @@
 
 import { useEffect, useState } from "react";
 import {
-  Award,
   CheckCircle2,
   AlertCircle,
   Sparkles,
-  BookOpen,
-  Calendar,
   Save,
   RotateCcw,
-  Layers,
-  Plus,
   X,
-  Loader2,
   Pencil,
 } from "lucide-react";
 
@@ -83,7 +77,6 @@ export default function TeacherMarksPage() {
   // Exam Slot Modal State (Create & Edit/Rename)
   const [showSlotModal, setShowSlotModal] = useState(false);
   const [slotModalMode, setSlotModalMode] = useState<"create" | "edit">("create");
-  const [editingSlotId, setEditingSlotId] = useState<string | null>(null);
   const [newSlotCode, setNewSlotCode] = useState("");
   const [newSlotName, setNewSlotName] = useState("");
   const [newSlotTerm, setNewSlotTerm] = useState<"TERM1" | "TERM2">("TERM1");
@@ -98,12 +91,17 @@ export default function TeacherMarksPage() {
       fetch("/api/exam-slots").then((r) => r.json()),
     ])
       .then(([secData, subData, slotsData]) => {
-        setSections(Array.isArray(secData) ? secData : []);
-        setSubjects(Array.isArray(subData) ? subData : []);
+        const loadedSections = Array.isArray(secData) ? secData : [];
+        const loadedSubjects = Array.isArray(subData) ? subData : [];
         const loadedSlots = Array.isArray(slotsData) ? slotsData : [];
+
+        setSections(loadedSections);
+        setSubjects(loadedSubjects);
         setExamSlots(loadedSlots);
 
-        // Pick initial slot
+        if (loadedSections.length > 0) setSectionId(loadedSections[0].id);
+        if (loadedSubjects.length > 0) setSubjectId(loadedSubjects[0].id);
+
         const t1First = loadedSlots.find((s: ExamSlotOption) => s.term === "TERM1");
         if (t1First) {
           setSelectedSlotCode(t1First.code);
@@ -113,7 +111,7 @@ export default function TeacherMarksPage() {
         setLoadingOptions(false);
       })
       .catch((err) => {
-        setMessage("Failed to load setup choices: " + err.message);
+        setMessage("Failed to load options: " + err.message);
         setIsError(true);
         setLoadingOptions(false);
       });
@@ -125,10 +123,7 @@ export default function TeacherMarksPage() {
       return;
     }
 
-    setLoadingGrid(true);
-    setMessage("");
-    setIsError(false);
-
+    let ignore = false;
     fetch(
       `/api/marks?sectionId=${sectionId}&subjectId=${subjectId}&examName=${encodeURIComponent(
         selectedSlotCode
@@ -139,7 +134,7 @@ export default function TeacherMarksPage() {
         return res.json();
       })
       .then((data) => {
-        if (Array.isArray(data)) {
+        if (!ignore && Array.isArray(data)) {
           const currentSlot = examSlots.find((s) => s.code === selectedSlotCode);
           const fallbackMax = currentSlot ? String(currentSlot.maxScore) : defaultMaxScore;
 
@@ -158,20 +153,27 @@ export default function TeacherMarksPage() {
           }));
           setRows(formatted);
           setInitialRows(formatted);
-        } else {
+          setLoadingGrid(false);
+        } else if (!ignore) {
           setRows([]);
           setInitialRows([]);
+          setLoadingGrid(false);
         }
-        setLoadingGrid(false);
       })
       .catch((err) => {
-        setMessage(err.message || "Failed to load marks");
-        setIsError(true);
-        setLoadingGrid(false);
+        if (!ignore) {
+          setMessage(err.message || "Failed to load marks");
+          setIsError(true);
+          setLoadingGrid(false);
+        }
       });
+
+    return () => {
+      ignore = true;
+    };
   }, [sectionId, subjectId, selectedSlotCode, examSlots, defaultMaxScore]);
 
-  // Handle Term Change: auto-select first slot of selected term
+  // Handle Term Change
   const handleTermChange = (term: "TERM1" | "TERM2") => {
     setSelectedTerm(term);
     const firstSlot = examSlots.find((s) => s.term === term);
@@ -181,7 +183,6 @@ export default function TeacherMarksPage() {
     }
   };
 
-  // Handle Slot Change
   const handleSlotChange = (code: string) => {
     setSelectedSlotCode(code);
     const slot = examSlots.find((s) => s.code === code);
@@ -190,29 +191,22 @@ export default function TeacherMarksPage() {
     }
   };
 
-  // Update Score in row
   const handleScoreChange = (studentId: string, val: string) => {
     setRows((prev) =>
       prev.map((r) =>
-        r.studentId === studentId
-          ? { ...r, score: val, isModified: true }
-          : r
+        r.studentId === studentId ? { ...r, score: val, isModified: true } : r
       )
     );
   };
 
-  // Update individual Max Score in row
   const handleMaxScoreChange = (studentId: string, val: string) => {
     setRows((prev) =>
       prev.map((r) =>
-        r.studentId === studentId
-          ? { ...r, maxScore: val, isModified: true }
-          : r
+        r.studentId === studentId ? { ...r, maxScore: val, isModified: true } : r
       )
     );
   };
 
-  // Batch Set Max Score for all students
   const handleSetAllMax = (val: string) => {
     setDefaultMaxScore(val);
     setRows((prev) =>
@@ -224,14 +218,13 @@ export default function TeacherMarksPage() {
     );
   };
 
-  // Reset unsaved changes
   const resetChanges = () => {
     setRows(initialRows);
     setMessage("");
     setIsError(false);
   };
 
-  // ─── Subject Modal Handlers ───
+  // Subject Modal Handlers
   const openCreateSubjectModal = () => {
     setSubjectModalMode("create");
     setEditingSubjectId(null);
@@ -240,11 +233,11 @@ export default function TeacherMarksPage() {
     setShowSubjectModal(true);
   };
 
-  const openEditSubjectModal = (subId: string) => {
-    const sub = subjects.find((s) => s.id === subId);
+  const openEditSubjectModal = (id: string) => {
+    const sub = subjects.find((s) => s.id === id);
     if (!sub) return;
     setSubjectModalMode("edit");
-    setEditingSubjectId(sub.id);
+    setEditingSubjectId(id);
     setNewSubjectName(sub.name);
     setSubjectModalError("");
     setShowSubjectModal(true);
@@ -252,67 +245,51 @@ export default function TeacherMarksPage() {
 
   const handleSaveSubject = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newSubjectName.trim()) {
-      setSubjectModalError("Please enter a subject name.");
-      return;
-    }
+    if (!newSubjectName.trim()) return;
+
+    setSavingSubject(true);
+    setSubjectModalError("");
+
     try {
-      setSavingSubject(true);
-      setSubjectModalError("");
+      const url = "/api/subjects";
+      const method = subjectModalMode === "edit" ? "PUT" : "POST";
+      const body =
+        subjectModalMode === "edit"
+          ? { id: editingSubjectId, name: newSubjectName.trim() }
+          : { name: newSubjectName.trim() };
+
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to save subject");
+      }
 
       if (subjectModalMode === "create") {
-        const res = await fetch("/api/subjects", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: newSubjectName.trim() }),
-        });
-        const data = await res.json();
-        if (!res.ok) {
-          throw new Error(data.error || "Failed to create subject");
-        }
-        // Refresh subjects list
-        const subRes = await fetch("/api/subjects");
-        const subData = await subRes.json();
-        if (Array.isArray(subData)) {
-          setSubjects(subData);
-        }
+        setSubjects((prev) => [...prev, data]);
         setSubjectId(data.id);
-        setNewSubjectName("");
-        setShowSubjectModal(false);
-        setMessage(`Subject "${data.name}" created and assigned successfully.`);
-        setIsError(false);
       } else {
-        // Edit/Rename Subject
-        const res = await fetch("/api/subjects", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id: editingSubjectId, name: newSubjectName.trim() }),
-        });
-        const data = await res.json();
-        if (!res.ok) {
-          throw new Error(data.error || "Failed to update subject");
-        }
-        // Refresh subjects list
-        const subRes = await fetch("/api/subjects");
-        const subData = await subRes.json();
-        if (Array.isArray(subData)) {
-          setSubjects(subData);
-        }
-        setShowSubjectModal(false);
-        setMessage(`Subject renamed to "${data.name}" successfully.`);
-        setIsError(false);
+        setSubjects((prev) =>
+          prev.map((s) => (s.id === editingSubjectId ? { ...s, name: data.name } : s))
+        );
       }
-    } catch (err: any) {
-      setSubjectModalError(err.message || "Failed to save subject");
+
+      setShowSubjectModal(false);
+      setNewSubjectName("");
+    } catch (err: unknown) {
+      setSubjectModalError(err instanceof Error ? err.message : "Failed to save subject");
     } finally {
       setSavingSubject(false);
     }
   };
 
-  // ─── Exam Slot Modal Handlers ───
+  // Exam Slot Modal Handlers
   const openCreateSlotModal = () => {
     setSlotModalMode("create");
-    setEditingSlotId(null);
     setNewSlotCode("");
     setNewSlotName("");
     setNewSlotTerm(selectedTerm);
@@ -322,7 +299,6 @@ export default function TeacherMarksPage() {
 
   const openEditSlotModal = (slot: ExamSlotOption) => {
     setSlotModalMode("edit");
-    setEditingSlotId(slot.id);
     setNewSlotCode(slot.code);
     setNewSlotName(slot.name);
     setNewSlotTerm(slot.term);
@@ -332,122 +308,59 @@ export default function TeacherMarksPage() {
 
   const handleSaveExamSlot = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (slotModalMode === "create" && !newSlotCode.trim()) {
-      setSlotModalError("Please enter a slot code (e.g. UT5, Practical 1).");
-      return;
-    }
-    if (slotModalMode === "edit" && !newSlotName.trim()) {
-      setSlotModalError("Please enter a display name for this exam slot.");
-      return;
-    }
+    if (!newSlotCode.trim()) return;
+
+    setSavingSlot(true);
+    setSlotModalError("");
+
     try {
-      setSavingSlot(true);
-      setSlotModalError("");
-      const curSection = sections.find((s) => s.id === sectionId);
-      const academicYear = curSection?.academicYear || "2026-27";
+      const res = await fetch("/api/exam-slots", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code: newSlotCode.trim().toUpperCase(),
+          name: newSlotName.trim() || newSlotCode.trim().toUpperCase(),
+          term: newSlotTerm,
+          maxScore: 100,
+        }),
+      });
 
-      if (slotModalMode === "create") {
-        const res = await fetch("/api/exam-slots", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            code: newSlotCode.trim(),
-            name: newSlotName.trim() || newSlotCode.trim(),
-            term: newSlotTerm,
-            academicYear,
-          }),
-        });
-        const data = await res.json();
-        if (!res.ok) {
-          throw new Error(data.error || "Failed to create exam slot");
-        }
-
-        // Refresh slots
-        const slotsRes = await fetch(`/api/exam-slots?academicYear=${academicYear}`);
-        const slotsData = await slotsRes.json();
-        if (Array.isArray(slotsData)) {
-          setExamSlots(slotsData);
-        }
-        setSelectedTerm(newSlotTerm);
-        setSelectedSlotCode(data.code);
-        setNewSlotCode("");
-        setNewSlotName("");
-        setShowSlotModal(false);
-        setMessage(`Exam assessment slot "${data.name}" created successfully.`);
-        setIsError(false);
-      } else {
-        // Edit/Rename Exam Slot (updates display name and term; code is immutable)
-        const res = await fetch("/api/exam-slots", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            id: editingSlotId,
-            name: newSlotName.trim(),
-            term: newSlotTerm,
-          }),
-        });
-        const data = await res.json();
-        if (!res.ok) {
-          throw new Error(data.error || "Failed to update exam slot");
-        }
-
-        // Refresh slots
-        const slotsRes = await fetch(`/api/exam-slots?academicYear=${academicYear}`);
-        const slotsData = await slotsRes.json();
-        if (Array.isArray(slotsData)) {
-          setExamSlots(slotsData);
-        }
-        setSelectedTerm(data.term);
-        setSelectedSlotCode(data.code);
-        setShowSlotModal(false);
-        setMessage(`Exam assessment slot "${data.name}" updated successfully.`);
-        setIsError(false);
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to save exam slot");
       }
+
+      setExamSlots((prev) => {
+        const existingIdx = prev.findIndex((s) => s.code === data.code);
+        if (existingIdx >= 0) {
+          const updated = [...prev];
+          updated[existingIdx] = data;
+          return updated;
+        }
+        return [...prev, data];
+      });
+
+      setSelectedSlotCode(data.code);
+      setShowSlotModal(false);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Failed to save exam slot";
-      setSlotModalError(msg);
+      setSlotModalError(err instanceof Error ? err.message : "Failed to save exam slot");
     } finally {
       setSavingSlot(false);
     }
   };
 
-  // Save all modified marks
+  // Submit Marks
   const handleSave = async () => {
+    setSaving(true);
     setMessage("");
     setIsError(false);
 
-    // Validation: score cannot exceed maxScore
-    for (const r of rows) {
-      if (r.score.trim() !== "") {
-        const s = parseFloat(r.score);
-        const m = parseFloat(r.maxScore);
-        if (isNaN(s) || isNaN(m)) {
-          setMessage(`Invalid score or max score entered for ${r.fullName}`);
-          setIsError(true);
-          return;
-        }
-        if (s < 0) {
-          setMessage(`Score cannot be negative for ${r.fullName}`);
-          setIsError(true);
-          return;
-        }
-        if (s > m) {
-          setMessage(
-            `Score (${s}) cannot exceed maximum score (${m}) for ${r.fullName}`
-          );
-          setIsError(true);
-          return;
-        }
-      }
-    }
-
-    setSaving(true);
     try {
       const recordsToSubmit = rows
-        .filter((r) => r.score.trim() !== "" || r.markId !== null)
+        .filter((r) => r.score.trim() !== "")
         .map((r) => ({
           studentId: r.studentId,
-          score: r.score.trim() === "" ? 0 : parseFloat(r.score),
+          score: parseFloat(r.score) || 0,
           maxScore: parseFloat(r.maxScore) || 30,
         }));
 
@@ -468,11 +381,11 @@ export default function TeacherMarksPage() {
       }
 
       setMessage(
-        `Successfully saved examination marks for ${data.recordsCount || rows.length} student(s).`
+        `Successfully saved examination marks for ${data.recordsCount || recordsToSubmit.length} student(s).`
       );
       setIsError(false);
 
-      // Reload fresh state to get newly generated Mark IDs
+      // Reload fresh state
       const reloadRes = await fetch(
         `/api/marks?sectionId=${sectionId}&subjectId=${subjectId}&examName=${encodeURIComponent(
           selectedSlotCode
@@ -504,18 +417,18 @@ export default function TeacherMarksPage() {
     }
   };
 
-  const getGradeBadge = (score: string, maxScore: string) => {
+  const getGradePill = (score: string, maxScore: string) => {
     const s = parseFloat(score);
     const m = parseFloat(maxScore);
     if (isNaN(s) || isNaN(m) || m <= 0) return null;
     const pct = (s / m) * 100;
-    if (pct >= 90) return <span className="badge badge-success">A+</span>;
-    if (pct >= 80) return <span className="badge badge-teal">A</span>;
-    if (pct >= 70) return <span className="badge badge-indigo">B+</span>;
-    if (pct >= 60) return <span className="badge badge-info">B</span>;
-    if (pct >= 50) return <span className="badge badge-warning">C</span>;
-    if (pct >= 35) return <span className="badge badge-warning">D</span>;
-    return <span className="badge badge-danger">F</span>;
+    if (pct >= 90) return <span className="office-pill office-pill-green">A+ ({pct.toFixed(0)}%)</span>;
+    if (pct >= 80) return <span className="office-pill office-pill-green">A ({pct.toFixed(0)}%)</span>;
+    if (pct >= 70) return <span className="office-pill office-pill-blue">B+ ({pct.toFixed(0)}%)</span>;
+    if (pct >= 60) return <span className="office-pill office-pill-blue">B ({pct.toFixed(0)}%)</span>;
+    if (pct >= 50) return <span className="office-pill office-pill-amber">C ({pct.toFixed(0)}%)</span>;
+    if (pct >= 35) return <span className="office-pill office-pill-amber">D ({pct.toFixed(0)}%)</span>;
+    return <span className="office-pill office-pill-red">F ({pct.toFixed(0)}%)</span>;
   };
 
   const currentTermSlots = examSlots.filter((s) => s.term === selectedTerm);
@@ -526,35 +439,31 @@ export default function TeacherMarksPage() {
   const savedCount = rows.filter((r) => r.markId && !r.isModified).length;
 
   return (
-    <div style={{ maxWidth: "1100px", margin: "0 auto", paddingBottom: "60px" }}>
+    <div className="office-page-container">
       {/* ─── Page Header ─── */}
-      <div className="page-header">
+      <div className="office-header">
         <div>
-          <h1 className="page-title">Exams & Marks Entry</h1>
-          <p className="page-subtitle">
-            Enter, review, and update term test and examination marks for your assigned subjects and sections.
+          <h1 className="office-title">Examinations & Marks Entry</h1>
+          <p className="office-subtitle">
+            Record student assessment marks, configure exam slots, and automatically generate grades
           </p>
         </div>
       </div>
 
-      {/* ─── Filter Selection Card ─── */}
-      <div className="card" style={{ marginBottom: "24px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "16px", borderBottom: "1px solid var(--border-subtle)", paddingBottom: "10px" }}>
-          <Layers size={18} color="#2dd4bf" />
-          <h3 className="card-title" style={{ margin: 0, fontSize: "15px" }}>Assessment Target</h3>
-        </div>
-
-        <div className="form-row" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
+      {/* ─── Assessment Selection Box ─── */}
+      <div className="office-card" style={{ marginBottom: "20px" }}>
+        <div className="office-form-grid-2">
           {/* Section Picker */}
-          <div className="form-group">
-            <label className="form-label">Class & Section Batch</label>
+          <div className="office-form-group">
+            <label className="office-form-label">Class & Section</label>
             <select
-              className="form-select"
+              className="office-select"
               value={sectionId}
               onChange={(e) => setSectionId(e.target.value)}
               disabled={loadingOptions}
+              style={{ width: "100%" }}
             >
-              <option value="">Choose classroom batch...</option>
+              <option value="">-- Choose Classroom --</option>
               {sections.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.class.name} — Section {s.name} ({s.academicYear})
@@ -563,12 +472,12 @@ export default function TeacherMarksPage() {
             </select>
           </div>
 
-          {/* Subject Picker with + Add New Subject and Edit Pencil */}
-          <div className="form-group">
-            <label className="form-label">Assigned Subject</label>
-            <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+          {/* Subject Picker with Add/Edit */}
+          <div className="office-form-group">
+            <label className="office-form-label">Subject</label>
+            <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
               <select
-                className="form-select"
+                className="office-select"
                 style={{ flex: 1 }}
                 value={subjectId}
                 onChange={(e) => {
@@ -580,13 +489,13 @@ export default function TeacherMarksPage() {
                 }}
                 disabled={loadingOptions}
               >
-                <option value="">Choose subject...</option>
+                <option value="">-- Choose Subject --</option>
                 {subjects.map((sub) => (
                   <option key={sub.id} value={sub.id}>
                     {sub.name}
                   </option>
                 ))}
-                <option value="__add_new_subject__" style={{ fontWeight: 600, color: "var(--color-primary, #2563eb)" }}>
+                <option value="__add_new_subject__" style={{ fontWeight: 600, color: "#1e3a8a" }}>
                   + Add new subject...
                 </option>
               </select>
@@ -594,51 +503,46 @@ export default function TeacherMarksPage() {
                 <button
                   type="button"
                   onClick={() => openEditSubjectModal(selectedSubject.id)}
-                  className="btn btn-secondary"
-                  style={{ height: "38px", width: "38px", padding: 0, flexShrink: 0 }}
+                  className="office-btn office-btn-secondary office-btn-sm"
                   title="Rename selected subject"
-                  aria-label="Rename selected subject"
                 >
-                  <Pencil size={15} />
+                  <Pencil size={14} />
                 </button>
               )}
             </div>
-            {subjects.length === 0 && !loadingOptions && (
-              <span style={{ fontSize: "11.5px", color: "var(--text-muted)", marginTop: "4px", display: "block" }}>
-                No subjects assigned yet. Click &quot;+ Add new subject...&quot; to create one.
-              </span>
-            )}
           </div>
+        </div>
 
-          {/* Term Selector */}
-          <div className="form-group">
-            <label className="form-label">Academic Term</label>
-            <div className="tabs" style={{ marginBottom: 0 }}>
+        <div className="office-form-grid-2" style={{ marginTop: "10px" }}>
+          {/* Term Switcher */}
+          <div className="office-form-group">
+            <label className="office-form-label">Academic Term</label>
+            <div style={{ display: "flex", gap: "10px" }}>
               <button
                 type="button"
-                className={`tab ${selectedTerm === "TERM1" ? "tab-active" : ""}`}
                 onClick={() => handleTermChange("TERM1")}
-                style={{ flex: 1, padding: "7px 12px", fontSize: "13px" }}
+                className={`office-btn office-btn-sm ${selectedTerm === "TERM1" ? "office-btn-primary" : "office-btn-secondary"}`}
+                style={{ flex: 1, height: "38px" }}
               >
-                Term 1
+                Term 1 (First Half)
               </button>
               <button
                 type="button"
-                className={`tab ${selectedTerm === "TERM2" ? "tab-active" : ""}`}
                 onClick={() => handleTermChange("TERM2")}
-                style={{ flex: 1, padding: "7px 12px", fontSize: "13px" }}
+                className={`office-btn office-btn-sm ${selectedTerm === "TERM2" ? "office-btn-primary" : "office-btn-secondary"}`}
+                style={{ flex: 1, height: "38px" }}
               >
-                Term 2
+                Term 2 (Final Half)
               </button>
             </div>
           </div>
 
-          {/* Exam Slot Selector with Edit Pencil */}
-          <div className="form-group">
-            <label className="form-label">Exam Assessment Slot</label>
-            <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+          {/* Exam Slot Selector */}
+          <div className="office-form-group">
+            <label className="office-form-label">Exam Assessment Slot</label>
+            <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
               <select
-                className="form-select"
+                className="office-select"
                 style={{ flex: 1 }}
                 value={selectedSlotCode}
                 onChange={(e) => {
@@ -655,20 +559,18 @@ export default function TeacherMarksPage() {
                     {s.name}
                   </option>
                 ))}
-                <option value="__add_new_slot__" style={{ fontWeight: 600, color: "var(--color-primary, #2563eb)" }}>
-                  + Add new exam slot...
+                <option value="__add_new_slot__" style={{ fontWeight: 600, color: "#1e3a8a" }}>
+                  + Add new exam test...
                 </option>
               </select>
               {activeSlot && (
                 <button
                   type="button"
                   onClick={() => openEditSlotModal(activeSlot)}
-                  className="btn btn-secondary"
-                  style={{ height: "38px", width: "38px", padding: 0, flexShrink: 0 }}
-                  title="Rename/edit selected exam slot"
-                  aria-label="Rename selected exam slot"
+                  className="office-btn office-btn-secondary office-btn-sm"
+                  title="Rename exam slot"
                 >
-                  <Pencil size={15} />
+                  <Pencil size={14} />
                 </button>
               )}
             </div>
@@ -679,8 +581,19 @@ export default function TeacherMarksPage() {
       {/* ─── Feedback Message ─── */}
       {message && (
         <div
-          className={`alert ${isError ? "alert-error" : "alert-success"}`}
-          style={{ marginBottom: "20px" }}
+          style={{
+            background: isError ? "#fef2f2" : "#ecfdf5",
+            border: `1px solid ${isError ? "#fecaca" : "#a7f3d0"}`,
+            color: isError ? "#991b1b" : "#065f46",
+            borderRadius: "8px",
+            padding: "14px 18px",
+            marginBottom: "20px",
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            fontSize: "14px",
+            fontWeight: 500,
+          }}
         >
           {isError ? <AlertCircle size={18} /> : <CheckCircle2 size={18} />}
           <span>{message}</span>
@@ -689,208 +602,156 @@ export default function TeacherMarksPage() {
 
       {/* ─── Loading State ─── */}
       {loadingGrid && (
-        <div className="loading" style={{ margin: "40px 0" }}>
-          <Sparkles size={20} className="animate-spin" /> Loading students & assessment scores...
+        <div className="office-card" style={{ padding: "60px 20px", textAlign: "center" }}>
+          <Sparkles size={22} className="animate-spin" color="#1e3a8a" style={{ margin: "0 auto 8px" }} />
+          <div style={{ color: "#64748b", fontSize: "14px" }}>Loading students and assessment marks...</div>
         </div>
       )}
 
-      {/* ─── Selection Prompt ─── */}
-      {!loadingGrid && (!sectionId || !subjectId || !selectedSlotCode) && (
-        <div className="card">
-          <div className="empty-state" style={{ padding: "40px 20px" }}>
-            <div className="empty-state-icon-wrap" style={{ background: "var(--role-teacher-light)", color: "#2dd4bf" }}>
-              <BookOpen size={28} />
-            </div>
-            <div className="empty-state-title">Select Class, Subject & Exam Slot</div>
-            <div className="empty-state-text" style={{ maxWidth: "420px" }}>
-              Choose a classroom batch, assigned subject, and exam slot from the dropdowns above to enter and review student marks.
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ─── Marks Grid Card ─── */}
+      {/* ─── Marks Table Card ─── */}
       {!loadingGrid && sectionId && subjectId && selectedSlotCode && (
-        <div className="card">
+        <div className="office-card" style={{ padding: 0, overflow: "hidden" }}>
           {/* Header Action Bar */}
           <div
             style={{
+              padding: "16px 20px",
+              background: "#f8fafc",
+              borderBottom: "1px solid #e2e8f0",
               display: "flex",
               justifyContent: "space-between",
               alignItems: "center",
-              marginBottom: "16px",
-              paddingBottom: "12px",
-              borderBottom: "1px solid var(--border-subtle)",
               flexWrap: "wrap",
-              gap: "12px",
+              gap: "14px",
             }}
           >
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <span style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary)" }}>
-                  {activeSlot?.name || selectedSlotCode} Assessment
+                <span style={{ fontSize: "16px", fontWeight: 700, color: "#0f172a" }}>
+                  {activeSlot?.name || selectedSlotCode}
                 </span>
-                <span className="badge badge-teal">{selectedTerm === "TERM1" ? "Term 1" : "Term 2"}</span>
+                <span className="office-pill office-pill-blue">
+                  {selectedTerm === "TERM1" ? "Term 1" : "Term 2"}
+                </span>
               </div>
-              <div style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "2px" }}>
-                {filledCount} of {rows.length} students evaluated ({savedCount} saved in database)
+              <div style={{ fontSize: "12.5px", color: "#64748b", marginTop: "2px" }}>
+                {filledCount} of {rows.length} students evaluated ({savedCount} recorded in database)
               </div>
             </div>
 
             {/* Quick Bulk Max Score Tool */}
-            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <span style={{ fontSize: "12.5px", color: "#64748b" }}>Max Marks:</span>
               <input
                 type="number"
-                step="any"
                 min="1"
-                className="form-input"
+                className="office-input"
                 style={{
-                  height: "30px",
-                  width: "60px",
+                  height: "34px",
+                  width: "70px",
                   padding: "4px 8px",
-                  fontSize: "12.5px",
+                  fontSize: "13px",
                   textAlign: "center",
-                  background: "var(--bg-surface)",
-                  borderColor: "var(--border-subtle)",
                 }}
-                placeholder="Max"
                 value={defaultMaxScore}
                 onChange={(e) => setDefaultMaxScore(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    handleSetAllMax(defaultMaxScore);
-                  }
-                }}
               />
               <button
                 type="button"
-                className="btn btn-secondary btn-sm"
+                className="office-btn office-btn-secondary office-btn-sm"
                 onClick={() => handleSetAllMax(defaultMaxScore)}
-                disabled={!defaultMaxScore.trim()}
               >
-                Set for All
+                Apply to All
               </button>
             </div>
           </div>
 
-          {/* Marks Spreadsheet Table */}
-          <div className="table-responsive">
-            <table className="table">
+          {/* Table */}
+          <div className="office-table-wrapper" style={{ border: "none", borderRadius: 0 }}>
+            <table className="office-table">
               <thead>
                 <tr>
                   <th style={{ width: "80px", textAlign: "center" }}>Roll</th>
-                  <th style={{ width: "120px" }}>Adm. No</th>
+                  <th style={{ width: "120px" }}>Adm. No.</th>
                   <th>Student Name</th>
-                  <th style={{ width: "140px", textAlign: "center" }}>
-                    Score <span style={{ fontSize: "10.5px", fontWeight: 400, color: "var(--text-muted)" }}>(Points)</span>
-                  </th>
-                  <th style={{ width: "120px", textAlign: "center" }}>
-                    Out of <span style={{ fontSize: "10.5px", fontWeight: 400, color: "var(--text-muted)" }}>(Max)</span>
-                  </th>
-                  <th style={{ width: "80px", textAlign: "center" }}>Grade</th>
-                  <th style={{ width: "90px", textAlign: "center" }}>Status</th>
+                  <th style={{ width: "140px", textAlign: "center" }}>Score (Points)</th>
+                  <th style={{ width: "120px", textAlign: "center" }}>Out of (Max)</th>
+                  <th style={{ width: "140px", textAlign: "center" }}>Grade</th>
+                  <th style={{ width: "100px", textAlign: "center" }}>Status</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.length === 0 ? (
                   <tr>
-                    <td colSpan={7} style={{ textAlign: "center", padding: "32px", color: "var(--text-muted)" }}>
-                      No active students found in this section.
+                    <td colSpan={7} style={{ textAlign: "center", padding: "36px", color: "#64748b" }}>
+                      No active students found in this class section.
                     </td>
                   </tr>
                 ) : (
                   rows.map((row) => {
-                    const gradeBadge = getGradeBadge(row.score, row.maxScore);
+                    const gradePill = getGradePill(row.score, row.maxScore);
                     return (
                       <tr
                         key={row.studentId}
                         style={{
-                          background: row.isModified
-                            ? "var(--role-teacher-light)"
-                            : "transparent",
-                          transition: "background 0.15s ease",
+                          background: row.isModified ? "#f0fdf4" : undefined,
                         }}
                       >
-                        {/* Roll Number */}
-                        <td style={{ textAlign: "center", fontWeight: 600, color: "var(--text-muted)" }}>
-                          {row.rollNumber || `—`}
+                        <td style={{ textAlign: "center", color: "#64748b", fontWeight: 600 }}>
+                          {row.rollNumber || "—"}
                         </td>
-
-                        {/* Admission No */}
-                        <td style={{ fontFamily: "monospace", fontSize: "12px" }}>
+                        <td style={{ fontFamily: "monospace", fontSize: "13px", color: "#1e3a8a", fontWeight: 600 }}>
                           {row.admissionNo}
                         </td>
-
-                        {/* Full Name */}
-                        <td style={{ fontWeight: 600, color: "var(--text-primary)" }}>
-                          {row.fullName}
+                        <td>
+                          <span style={{ fontWeight: 600, color: "#0f172a" }}>{row.fullName}</span>
                         </td>
-
-                        {/* Score Input */}
                         <td style={{ textAlign: "center" }}>
                           <input
                             type="number"
-                            step="any"
                             min="0"
                             max={row.maxScore || "100"}
-                            className="form-input"
+                            className="office-input"
                             style={{
                               textAlign: "center",
                               fontWeight: 700,
                               fontSize: "14px",
-                              padding: "6px 8px",
                               width: "90px",
                               margin: "0 auto",
-                              borderColor: row.isModified ? "#2dd4bf" : "var(--border-subtle)",
+                              height: "36px",
+                              borderColor: row.isModified ? "#059669" : "#cbd5e1",
                             }}
                             placeholder="—"
                             value={row.score}
                             onChange={(e) => handleScoreChange(row.studentId, e.target.value)}
                           />
                         </td>
-
-                        {/* Max Score Input */}
                         <td style={{ textAlign: "center" }}>
                           <input
                             type="number"
-                            step="any"
                             min="1"
-                            className="form-input"
+                            className="office-input"
                             style={{
                               textAlign: "center",
                               fontSize: "13px",
-                              padding: "6px 8px",
                               width: "75px",
                               margin: "0 auto",
-                              color: "var(--text-muted)",
+                              height: "36px",
+                              color: "#64748b",
                             }}
                             value={row.maxScore}
                             onChange={(e) => handleMaxScoreChange(row.studentId, e.target.value)}
                           />
                         </td>
-
-                        {/* Real-time Grade */}
                         <td style={{ textAlign: "center" }}>
-                          {gradeBadge || (
-                            <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>—</span>
-                          )}
+                          {gradePill || <span style={{ color: "#94a3b8" }}>—</span>}
                         </td>
-
-                        {/* Saved/Modified Indicator */}
                         <td style={{ textAlign: "center" }}>
                           {row.isModified ? (
-                            <span className="badge badge-warning" style={{ fontSize: "10.5px" }}>
-                              Unsaved
-                            </span>
+                            <span className="office-pill office-pill-amber">Unsaved</span>
                           ) : row.markId ? (
-                            <span className="badge badge-success" style={{ fontSize: "10.5px" }}>
-                              Saved
-                            </span>
+                            <span className="office-pill office-pill-green">Saved</span>
                           ) : (
-                            <span style={{ fontSize: "11.5px", color: "var(--text-muted)" }}>
-                              Pending
-                            </span>
+                            <span className="office-pill office-pill-gray">Pending</span>
                           )}
                         </td>
                       </tr>
@@ -901,48 +762,50 @@ export default function TeacherMarksPage() {
             </table>
           </div>
 
-          {/* Bottom Save Bar */}
+          {/* Bottom Save Action Bar */}
           <div
             style={{
+              padding: "18px 24px",
+              background: "#ffffff",
+              borderTop: "1px solid #e2e8f0",
               display: "flex",
               justifyContent: "space-between",
               alignItems: "center",
-              marginTop: "20px",
-              paddingTop: "16px",
-              borderTop: "1px solid var(--border-subtle)",
               flexWrap: "wrap",
-              gap: "10px",
+              gap: "12px",
             }}
           >
-            <div style={{ fontSize: "12.5px", color: "var(--text-muted)" }}>
+            <div style={{ fontSize: "13px", color: "#64748b" }}>
               {rows.some((r) => r.isModified) ? (
-                <span style={{ color: "#fbbf24", fontWeight: 500 }}>
-                  ⚠️ You have unsaved mark edits on this page.
+                <span style={{ color: "#d97706", fontWeight: 600 }}>
+                  ⚠️ Unsaved edits on this page. Click Save All Marks to record.
                 </span>
               ) : (
-                <span>All marks currently up to date.</span>
+                <span>All marks are currently saved.</span>
               )}
             </div>
-            <div style={{ display: "flex", gap: "8px" }}>
+
+            <div style={{ display: "flex", gap: "10px" }}>
               <button
                 type="button"
-                className="btn btn-secondary"
                 onClick={resetChanges}
                 disabled={saving || !rows.some((r) => r.isModified)}
+                className="office-btn office-btn-secondary"
               >
-                <RotateCcw size={16} /> Discard Changes
+                <RotateCcw size={14} />
+                <span>Discard Changes</span>
               </button>
               <button
                 type="button"
-                className="btn btn-primary"
                 onClick={handleSave}
                 disabled={saving || rows.length === 0}
-                style={{ gap: "6px" }}
+                className="office-btn office-btn-primary"
+                style={{ minWidth: "180px" }}
               >
                 {saving ? (
                   <>
                     <Sparkles size={16} className="animate-spin" />
-                    <span>Saving...</span>
+                    <span>Saving Marks...</span>
                   </>
                 ) : (
                   <>
@@ -956,37 +819,34 @@ export default function TeacherMarksPage() {
         </div>
       )}
 
-      {/* ─── Subject Modal (Create & Rename) ─── */}
+      {/* ─── Subject Modal ─── */}
       {showSubjectModal && (
         <div
-          className="modal-overlay"
-          style={{ zIndex: 1100 }}
-          onClick={() => {
-            setShowSubjectModal(false);
-            setSubjectModalError("");
-            setNewSubjectName("");
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(15, 23, 42, 0.4)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+            padding: "20px",
           }}
+          onClick={() => setShowSubjectModal(false)}
         >
           <div
-            className="modal-card"
-            style={{ maxWidth: "440px" }}
+            className="office-card"
+            style={{ width: "100%", maxWidth: "440px", margin: 0 }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <BookOpen size={18} color="#2dd4bf" />
-                <h3 className="card-title" style={{ margin: 0, fontSize: "16px" }}>
-                  {subjectModalMode === "edit" ? "Rename Subject" : "Add New Subject"}
-                </h3>
-              </div>
+            <div className="office-card-header">
+              <h3 className="office-card-title">
+                {subjectModalMode === "edit" ? "Rename Subject" : "Create New Subject"}
+              </h3>
               <button
                 type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={() => {
-                  setShowSubjectModal(false);
-                  setSubjectModalError("");
-                  setNewSubjectName("");
-                }}
+                onClick={() => setShowSubjectModal(false)}
+                className="office-btn office-btn-secondary office-btn-sm"
                 style={{ padding: "4px" }}
               >
                 <X size={16} />
@@ -994,61 +854,41 @@ export default function TeacherMarksPage() {
             </div>
 
             {subjectModalError && (
-              <div className="alert alert-error" style={{ marginBottom: "14px" }}>
-                <AlertCircle size={16} />
-                <span>{subjectModalError}</span>
+              <div style={{ color: "#dc2626", fontSize: "13px", marginBottom: "12px" }}>
+                {subjectModalError}
               </div>
             )}
 
             <form onSubmit={handleSaveSubject}>
-              <div className="form-group" style={{ marginBottom: "16px" }}>
-                <label className="form-label">Subject Name</label>
+              <div className="office-form-group">
+                <label className="office-form-label">Subject Name</label>
                 <input
                   type="text"
-                  className="form-input"
-                  placeholder="e.g. Computer Science, Social Studies, Hindi"
+                  placeholder="e.g. Science, Mathematics, Hindi"
                   value={newSubjectName}
                   onChange={(e) => setNewSubjectName(e.target.value)}
+                  className="office-input"
+                  style={{ width: "100%" }}
                   autoFocus
                   required
                 />
-                <span style={{ fontSize: "11.5px", color: "var(--text-muted)", marginTop: "4px", display: "block" }}>
-                  {subjectModalMode === "edit"
-                    ? "Renaming this subject updates it school-wide across all classes and reports."
-                    : "This subject will be available school-wide and automatically assigned to you."}
-                </span>
               </div>
 
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px" }}>
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "16px" }}>
                 <button
                   type="button"
-                  className="btn btn-secondary"
-                  onClick={() => {
-                    setShowSubjectModal(false);
-                    setSubjectModalError("");
-                    setNewSubjectName("");
-                  }}
+                  onClick={() => setShowSubjectModal(false)}
+                  className="office-btn office-btn-secondary"
                   disabled={savingSubject}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="btn btn-primary"
                   disabled={savingSubject || !newSubjectName.trim()}
-                  style={{ gap: "6px" }}
+                  className="office-btn office-btn-primary"
                 >
-                  {savingSubject ? (
-                    <>
-                      <Loader2 size={16} className="animate-spin" />
-                      <span>{subjectModalMode === "edit" ? "Saving..." : "Creating..."}</span>
-                    </>
-                  ) : (
-                    <>
-                      {subjectModalMode === "edit" ? <CheckCircle2 size={16} /> : <Plus size={16} />}
-                      <span>{subjectModalMode === "edit" ? "Save Changes" : "Create Subject"}</span>
-                    </>
-                  )}
+                  {savingSubject ? "Saving..." : subjectModalMode === "edit" ? "Save Name" : "Create Subject"}
                 </button>
               </div>
             </form>
@@ -1056,39 +896,34 @@ export default function TeacherMarksPage() {
         </div>
       )}
 
-      {/* ─── Exam Slot Modal (Create & Edit) ─── */}
+      {/* ─── Exam Slot Modal ─── */}
       {showSlotModal && (
         <div
-          className="modal-overlay"
-          style={{ zIndex: 1100 }}
-          onClick={() => {
-            setShowSlotModal(false);
-            setSlotModalError("");
-            setNewSlotCode("");
-            setNewSlotName("");
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(15, 23, 42, 0.4)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+            padding: "20px",
           }}
+          onClick={() => setShowSlotModal(false)}
         >
           <div
-            className="modal-card"
-            style={{ maxWidth: "460px" }}
+            className="office-card"
+            style={{ width: "100%", maxWidth: "460px", margin: 0 }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <Award size={18} color="#2dd4bf" />
-                <h3 className="card-title" style={{ margin: 0, fontSize: "16px" }}>
-                  {slotModalMode === "edit" ? "Edit Exam Assessment Slot" : "Add New Exam Assessment Slot"}
-                </h3>
-              </div>
+            <div className="office-card-header">
+              <h3 className="office-card-title">
+                {slotModalMode === "edit" ? "Edit Exam Test Slot" : "Add Exam Test Slot"}
+              </h3>
               <button
                 type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={() => {
-                  setShowSlotModal(false);
-                  setSlotModalError("");
-                  setNewSlotCode("");
-                  setNewSlotName("");
-                }}
+                onClick={() => setShowSlotModal(false)}
+                className="office-btn office-btn-secondary office-btn-sm"
                 style={{ padding: "4px" }}
               >
                 <X size={16} />
@@ -1096,114 +931,66 @@ export default function TeacherMarksPage() {
             </div>
 
             {slotModalError && (
-              <div className="alert alert-error" style={{ marginBottom: "14px" }}>
-                <AlertCircle size={16} />
-                <span>{slotModalError}</span>
+              <div style={{ color: "#dc2626", fontSize: "13px", marginBottom: "12px" }}>
+                {slotModalError}
               </div>
             )}
 
             <form onSubmit={handleSaveExamSlot}>
-              <div className="form-group" style={{ marginBottom: "14px" }}>
-                <label className="form-label">Academic Term</label>
-                <div className="tabs" style={{ marginBottom: 0 }}>
-                  <button
-                    type="button"
-                    className={`tab ${newSlotTerm === "TERM1" ? "tab-active" : ""}`}
-                    onClick={() => setNewSlotTerm("TERM1")}
-                    style={{ flex: 1, padding: "7px 12px", fontSize: "13px" }}
-                  >
-                    Term 1
-                  </button>
-                  <button
-                    type="button"
-                    className={`tab ${newSlotTerm === "TERM2" ? "tab-active" : ""}`}
-                    onClick={() => setNewSlotTerm("TERM2")}
-                    style={{ flex: 1, padding: "7px 12px", fontSize: "13px" }}
-                  >
-                    Term 2
-                  </button>
-                </div>
+              <div className="office-form-group">
+                <label className="office-form-label">Academic Term</label>
+                <select
+                  className="office-select"
+                  value={newSlotTerm}
+                  onChange={(e) => setNewSlotTerm(e.target.value as "TERM1" | "TERM2")}
+                  style={{ width: "100%" }}
+                >
+                  <option value="TERM1">Term 1</option>
+                  <option value="TERM2">Term 2</option>
+                </select>
               </div>
 
-              {slotModalMode === "create" ? (
-                <div className="form-group" style={{ marginBottom: "14px" }}>
-                  <label className="form-label">Slot Code</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    placeholder="e.g. UT5, PRACTICAL1, MIDTERM"
-                    value={newSlotCode}
-                    onChange={(e) => setNewSlotCode(e.target.value)}
-                    autoFocus
-                    required
-                  />
-                  <span style={{ fontSize: "11.5px", color: "var(--text-muted)", marginTop: "4px", display: "block" }}>
-                    A unique identifier code used in database records and report cards (fixed after creation).
-                  </span>
-                </div>
-              ) : (
-                <div className="form-group" style={{ marginBottom: "14px" }}>
-                  <label className="form-label">Slot Identifier Code (Fixed)</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    value={newSlotCode}
-                    disabled
-                    style={{ background: "var(--bg-surface)", color: "var(--text-muted)", cursor: "not-allowed", opacity: 0.8 }}
-                  />
-                  <span style={{ fontSize: "11.5px", color: "var(--text-muted)", marginTop: "4px", display: "block" }}>
-                    Internal identifier code used in historical marks records (immutable).
-                  </span>
-                </div>
-              )}
-
-              <div className="form-group" style={{ marginBottom: "16px" }}>
-                <label className="form-label">Display Name {slotModalMode === "edit" ? "" : "(Optional)"}</label>
+              <div className="office-form-group">
+                <label className="office-form-label">Slot Code (e.g. UT3, PRACTICAL)</label>
                 <input
                   type="text"
-                  className="form-input"
-                  placeholder="e.g. Unit Test 5, Practical Exam 1"
-                  value={newSlotName}
-                  onChange={(e) => setNewSlotName(e.target.value)}
-                  autoFocus={slotModalMode === "edit"}
-                  required={slotModalMode === "edit"}
+                  placeholder="e.g. UT3"
+                  value={newSlotCode}
+                  onChange={(e) => setNewSlotCode(e.target.value)}
+                  className="office-input"
+                  style={{ width: "100%" }}
+                  disabled={slotModalMode === "edit"}
+                  required
                 />
-                <span style={{ fontSize: "11.5px", color: "var(--text-muted)", marginTop: "4px", display: "block" }}>
-                  Human-readable label shown to teachers and on student report cards.
-                </span>
               </div>
 
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px" }}>
+              <div className="office-form-group">
+                <label className="office-form-label">Display Name</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Unit Test 3"
+                  value={newSlotName}
+                  onChange={(e) => setNewSlotName(e.target.value)}
+                  className="office-input"
+                  style={{ width: "100%" }}
+                />
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "16px" }}>
                 <button
                   type="button"
-                  className="btn btn-secondary"
-                  onClick={() => {
-                    setShowSlotModal(false);
-                    setSlotModalError("");
-                    setNewSlotCode("");
-                    setNewSlotName("");
-                  }}
+                  onClick={() => setShowSlotModal(false)}
+                  className="office-btn office-btn-secondary"
                   disabled={savingSlot}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="btn btn-primary"
-                  disabled={savingSlot || (slotModalMode === "create" ? !newSlotCode.trim() : !newSlotName.trim())}
-                  style={{ gap: "6px" }}
+                  disabled={savingSlot || !newSlotCode.trim()}
+                  className="office-btn office-btn-primary"
                 >
-                  {savingSlot ? (
-                    <>
-                      <Loader2 size={16} className="animate-spin" />
-                      <span>{slotModalMode === "edit" ? "Saving..." : "Creating..."}</span>
-                    </>
-                  ) : (
-                    <>
-                      {slotModalMode === "edit" ? <CheckCircle2 size={16} /> : <Plus size={16} />}
-                      <span>{slotModalMode === "edit" ? "Save Changes" : "Create Exam Slot"}</span>
-                    </>
-                  )}
+                  {savingSlot ? "Saving..." : slotModalMode === "edit" ? "Save Slot" : "Create Slot"}
                 </button>
               </div>
             </form>

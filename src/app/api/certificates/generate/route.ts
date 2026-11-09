@@ -41,7 +41,7 @@ export async function POST(request: Request) {
   const school = student.school;
   if (!school) return badRequest("School not found");
 
-  const certificateData: any = {
+  const certificateData: Record<string, unknown> = {
     type,
     student: {
       fullName: student.fullName,
@@ -86,6 +86,7 @@ export async function POST(request: Request) {
     try {
       await ctx.db.certificateLog.create({
         data: {
+          schoolId: ctx.session.user.schoolId,
           studentId,
           tcNumber,
           issueDate: new Date(issueDate),
@@ -93,10 +94,10 @@ export async function POST(request: Request) {
           lastAttendanceDate: new Date(lastAttendanceDate),
           conductRemark,
           generatedByUserId: ctx.session.user.id,
-        } as any,
+        },
       });
-    } catch (err: any) {
-      if (err.code === "P2002") {
+    } catch (err: unknown) {
+    if (typeof err === "object" && err && "code" in err && err.code === "P2002") {
         return badRequest(`TC Number "${tcNumber}" already exists. Each TC must have a unique number.`);
       }
       throw err;

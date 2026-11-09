@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { BookOpen, Calendar, Download, AlertCircle, Sparkles, Filter, Paperclip } from "lucide-react";
+import { BookOpen, Calendar, Download, Sparkles, Filter } from "lucide-react";
 
 type Assignment = {
   id: string;
@@ -32,30 +32,51 @@ export default function ParentAssignmentsPage() {
   const [selectedSubject, setSelectedSubject] = useState<string>("ALL");
 
   useEffect(() => {
-    fetch("/api/parent/students")
-      .then((r) => r.json())
-      .then((data: any[]) => {
-        const studentList = Array.isArray(data) ? data : [];
-        setChildren(studentList);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
+    let ignore = false;
+    async function loadStudents() {
+      try {
+        const r = await fetch("/api/parent/students");
+        const data: unknown = await r.json();
+        if (!ignore) {
+          const studentList = Array.isArray(data) ? (data as Child[]) : [];
+          setChildren(studentList);
+        }
+      } catch {
+        // ignore
+      } finally {
+        if (!ignore) setLoading(false);
+      }
+    }
+    loadStudents();
+    return () => {
+      ignore = true;
+    };
   }, []);
 
   const activeChild = children[selectedChildIndex] || null;
   const sectionId = activeChild?.section?.id || "";
 
   useEffect(() => {
-    if (!sectionId) {
-      setAssignments([]);
-      return;
+    let ignore = false;
+    async function loadAssignments() {
+      if (!sectionId) {
+        if (!ignore) setAssignments([]);
+        return;
+      }
+      try {
+        const res = await fetch(`/api/assignments?sectionId=${sectionId}`);
+        const data = await res.json();
+        if (!ignore) {
+          setAssignments(Array.isArray(data) ? data : []);
+        }
+      } catch {
+        if (!ignore) setAssignments([]);
+      }
     }
-    fetch(`/api/assignments?sectionId=${sectionId}`)
-      .then((r) => r.json())
-      .then((data) => {
-        setAssignments(Array.isArray(data) ? data : []);
-      })
-      .catch(() => setAssignments([]));
+    loadAssignments();
+    return () => {
+      ignore = true;
+    };
   }, [sectionId]);
 
   const formatDisplayDate = (d: string | null) => {

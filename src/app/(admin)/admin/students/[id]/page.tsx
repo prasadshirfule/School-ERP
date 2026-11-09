@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useEffect, useState, useCallback } from "react";
+import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -119,7 +119,6 @@ const STATUS_BADGE: Record<string, string> = {
 
 export default function StudentDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const router = useRouter();
 
   const [student, setStudent] = useState<StudentDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -128,7 +127,7 @@ export default function StudentDetailPage() {
 
   // Report Card Modal State
   const [showReportCardModal, setShowReportCardModal] = useState(false);
-  const [reportCardData, setReportCardData] = useState<any>(null);
+  const [reportCardData, setReportCardData] = useState<Record<string, unknown> | null>(null);
   const [loadingReportCard, setLoadingReportCard] = useState(false);
 
   // Certificate Modal State
@@ -140,7 +139,7 @@ export default function StudentDetailPage() {
   const [certConduct, setCertConduct] = useState("Good");
   const [certTcNumber, setCertTcNumber] = useState("");
   const [certIssueDate, setCertIssueDate] = useState(new Date().toISOString().slice(0, 10));
-  const [certData, setCertData] = useState<any>(null);
+  const [certData, setCertData] = useState<Record<string, unknown> | null>(null);
   const [generatingCert, setGeneratingCert] = useState(false);
   const [certError, setCertError] = useState("");
 
@@ -195,27 +194,7 @@ export default function StudentDetailPage() {
   const [paymentMethod, setPaymentMethod] = useState("CASH");
   const [paymentReceiptNumber, setPaymentReceiptNumber] = useState("");
 
-  const fetchStudentProfile = () => {
-    if (!id) return;
-    fetch(`/api/students/${id}`)
-      .then(async (res) => {
-        if (!res.ok) {
-          throw new Error("Student profile not found");
-        }
-        return res.json();
-      })
-      .then((data: StudentDetail) => {
-        setStudent(data);
-        populateEditForm(data);
-        setLoading(false);
-      })
-      .catch((err) => {
-        setError(err.message);
-        setLoading(false);
-      });
-  };
-
-  const populateEditForm = (data: StudentDetail) => {
+  const populateEditForm = useCallback((data: StudentDetail) => {
     setEditFullName(data.fullName || "");
     setEditRollNumber(data.rollNumber || "");
     setEditDob(data.dob ? data.dob.split("T")[0] : "");
@@ -249,24 +228,52 @@ export default function StudentDetailPage() {
     setEditEmergencyContactPhone(data.emergencyContactPhone || "");
     setEditMedicalConditions(data.medicalConditions || "");
     setEditClassDesignation(data.classDesignation || "");
-  };
+  }, []);
+
+  const fetchStudentProfile = useCallback(() => {
+    if (!id) return;
+    fetch(`/api/students/${id}`)
+      .then(async (res) => {
+        if (!res.ok) {
+          throw new Error("Student profile not found");
+        }
+        return res.json();
+      })
+      .then((data: StudentDetail) => {
+        setStudent(data);
+        populateEditForm(data);
+        setLoading(false);
+      })
+      .catch((err) => {
+        setError(err.message);
+        setLoading(false);
+      });
+  }, [id, populateEditForm]);
 
   useEffect(() => {
     fetchStudentProfile();
-  }, [id]);
+  }, [fetchStudentProfile]);
 
   useEffect(() => {
     if (!id || !showReportCardModal) return;
-    setLoadingReportCard(true);
-    fetch(`/api/students/${id}/report-card`)
-      .then((r) => r.json())
-      .then((data) => {
-        setReportCardData(data);
-        setLoadingReportCard(false);
-      })
-      .catch(() => {
-        setLoadingReportCard(false);
-      });
+    let ignore = false;
+    async function loadReportCard() {
+      try {
+        const res = await fetch(`/api/students/${id}/report-card`);
+        if (!ignore && res.ok) {
+          const data = await res.json();
+          setReportCardData(data);
+        }
+      } catch {
+        // ignore
+      } finally {
+        if (!ignore) setLoadingReportCard(false);
+      }
+    }
+    loadReportCard();
+    return () => {
+      ignore = true;
+    };
   }, [id, showReportCardModal]);
 
   const openCertModal = () => {
@@ -305,8 +312,8 @@ export default function StudentDetailPage() {
         throw new Error(data.error || "Failed to generate certificate");
       }
       setCertData(data);
-    } catch (err: any) {
-      setCertError(err.message || "Failed to generate certificate");
+    } catch (err: unknown) {
+      setCertError(err instanceof Error ? err.message : "Failed to generate certificate");
     } finally {
       setGeneratingCert(false);
     }
@@ -342,8 +349,8 @@ export default function StudentDetailPage() {
         throw new Error(data.error || "Failed to upload photo");
       }
       setEditPhotoUrl(data.photoUrl);
-    } catch (err: any) {
-      setPhotoError(err.message || "Failed to upload photo");
+    } catch (err: unknown) {
+      setPhotoError(err instanceof Error ? err.message : "Failed to upload photo");
     } finally {
       setPhotoUploading(false);
     }
@@ -405,15 +412,15 @@ export default function StudentDetailPage() {
       setIsEditing(false);
       setActionSuccess("Student enrollment and demographic details updated successfully.");
       setTimeout(() => setActionSuccess(""), 4000);
-    } catch (err: any) {
-      setEditError(err.message || "Failed to update student profile");
+    } catch (err: unknown) {
+      setEditError(err instanceof Error ? err.message : "Failed to update student profile");
     } finally {
       setSavingEdit(false);
     }
   };
 
   // Open Payment Modal
-  const openRecordPaymentModal = (inv: StudentDetail["invoices"][0]) => {
+  const openRecordPaymentModal = useCallback((inv: StudentDetail["invoices"][0]) => {
     setTargetInvoice(inv);
     const paid = inv.payments.reduce((s, p) => s + parseFloat(p.amount), 0);
     const due = parseFloat(inv.amountDue);
@@ -426,7 +433,7 @@ export default function StudentDetailPage() {
     setPaymentReceiptNumber(`REC-${currentYear}-${randomSuffix}`);
     setPaymentError("");
     setShowPaymentModal(true);
-  };
+  }, []);
 
   // Record Payment (Admin & Accountant)
   const handleRecordPayment = async (e: React.FormEvent) => {
@@ -457,8 +464,8 @@ export default function StudentDetailPage() {
       setActionSuccess(`Payment recorded successfully (Receipt #${paymentReceiptNumber}).`);
       setTimeout(() => setActionSuccess(""), 4000);
       fetchStudentProfile();
-    } catch (err: any) {
-      setPaymentError(err.message || "Failed to record payment");
+    } catch (err: unknown) {
+      setPaymentError(err instanceof Error ? err.message : "Failed to record payment");
     } finally {
       setRecordingPayment(false);
     }
@@ -1884,7 +1891,7 @@ export default function StudentDetailPage() {
                     <select
                       className="form-select"
                       value={certType}
-                      onChange={(e) => setCertType(e.target.value as any)}
+                      onChange={(e) => setCertType(e.target.value as "BONAFIDE" | "TC" | "CHARACTER")}
                     >
                       <option value="BONAFIDE">Bonafide Certificate</option>
                       <option value="TC">Transfer Certificate (TC - Persisted in TC Register)</option>

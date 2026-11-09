@@ -55,15 +55,15 @@ export async function GET(request: Request) {
   });
 
   // Distinct recorded dates (working days)
-  const distinctDates = Array.from(new Set(allRecords.map((r: any) => new Date(r.date).toISOString().slice(0, 10))));
+  const distinctDates = Array.from(new Set(allRecords.map((r) => new Date(r.date).toISOString().slice(0, 10))));
   const totalWorkingDays = distinctDates.length;
 
   // Student-wise metrics
-  const studentMetrics = students.map((s: any) => {
-    const sRecords = allRecords.filter((r: any) => r.studentId === s.id);
-    const presentDays = sRecords.filter((r: any) => r.status === "PRESENT" || r.status === "LATE").length;
-    const absentDays = sRecords.filter((r: any) => r.status === "ABSENT").length;
-    const leaveDays = sRecords.filter((r: any) => r.status === "LEAVE" || r.status === "HALF_DAY").length;
+  const studentMetrics = students.map((s) => {
+    const sRecords = allRecords.filter((r) => r.studentId === s.id);
+    const presentDays = sRecords.filter((r) => r.status === "PRESENT" || r.status === "LATE").length;
+    const absentDays = sRecords.filter((r) => r.status === "ABSENT").length;
+    const leaveDays = sRecords.filter((r) => r.status === "LEAVE" || r.status === "HALF_DAY").length;
     const pct = totalWorkingDays > 0 ? ((presentDays / totalWorkingDays) * 100).toFixed(1) : "0.0";
 
     return {
@@ -81,15 +81,15 @@ export async function GET(request: Request) {
 
   // Today's records & absentees for SMS/WhatsApp alert roster
   const todayRecords = allRecords.filter(
-    (r: any) => new Date(r.date).toISOString().slice(0, 10) === dateOnly.toISOString().slice(0, 10)
+    (r) => new Date(r.date).toISOString().slice(0, 10) === dateOnly.toISOString().slice(0, 10)
   );
 
   const absenteeList = students
-    .filter((s: any) => {
-      const rec = todayRecords.find((r: any) => r.studentId === s.id);
+    .filter((s) => {
+      const rec = todayRecords.find((r) => r.studentId === s.id);
       return rec && rec.status === "ABSENT";
     })
-    .map((s: any) => ({
+    .map((s) => ({
       studentId: s.id,
       fullName: s.fullName,
       rollNumber: s.rollNumber,
@@ -101,7 +101,7 @@ export async function GET(request: Request) {
   const overallSectionPct =
     studentMetrics.length > 0
       ? (
-          studentMetrics.reduce((acc: number, sm: any) => acc + parseFloat(sm.attendancePercentage), 0) /
+          studentMetrics.reduce((acc: number, sm) => acc + parseFloat(sm.attendancePercentage), 0) /
           studentMetrics.length
         ).toFixed(1)
       : "0.0";
@@ -119,8 +119,8 @@ export async function GET(request: Request) {
     todaySummary: {
       date: dateOnly,
       markedCount: todayRecords.length,
-      presentCount: todayRecords.filter((r: any) => r.status === "PRESENT" || r.status === "LATE").length,
-      absentCount: todayRecords.filter((r: any) => r.status === "ABSENT").length,
+      presentCount: todayRecords.filter((r) => r.status === "PRESENT" || r.status === "LATE").length,
+      absentCount: todayRecords.filter((r) => r.status === "ABSENT").length,
     },
     absenteesForAlerts: absenteeList,
     studentMetrics,

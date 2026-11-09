@@ -31,11 +31,25 @@ export default function ParentSyllabusPage() {
   }, []);
 
   useEffect(() => {
-    if (!classId || !selectedSubject) { setTopics([]); return; }
-    setLoadingTopics(true);
+    if (!classId || !selectedSubject) {
+      return;
+    }
+    let ignore = false;
     fetch(`/api/syllabus?classId=${classId}&subjectId=${selectedSubject}&academicYear=2026-27`)
       .then((r) => r.json())
-      .then((data) => { setTopics(Array.isArray(data) ? data : []); setLoadingTopics(false); });
+      .then((data) => {
+        if (!ignore) {
+          setTopics(Array.isArray(data) ? data : []);
+          setLoadingTopics(false);
+        }
+      })
+      .catch(() => {
+        if (!ignore) setLoadingTopics(false);
+      });
+
+    return () => {
+      ignore = true;
+    };
   }, [classId, selectedSubject]);
 
   const completed = topics.filter((t) => t.isCompleted).length;

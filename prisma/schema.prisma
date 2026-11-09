@@ -30,6 +30,10 @@ model School {
   term2StartDate    DateTime?
   term2EndDate      DateTime?
   isActive          Boolean  @default(true)
+  status            String   @default("APPROVED") // "PENDING" | "APPROVED" | "REJECTED" | "SUSPENDED"
+  suspendedReason   String?
+  approvedAt        DateTime?
+  approvedByUserId  String?
   createdAt         DateTime @default(now())
 
   users        User[]
@@ -53,6 +57,10 @@ model School {
   departments  Department[]
   leaveRequests LeaveRequest[]
   assignments  Assignment[]
+  subscription Subscription?
+  parentLinkRequests ParentStudentLinkRequest[]
+  notifications Notification[]
+  documents    Document[]
 
   @@index([isActive])
 }
@@ -62,6 +70,7 @@ model School {
 // ------------------------------------------------------------
 
 enum Role {
+  SUPER_ADMIN
   ADMIN
   TEACHER
   PARENT
@@ -71,21 +80,28 @@ enum Role {
 
 model User {
   id        String   @id @default(cuid())
-  schoolId  String
-  school    School   @relation(fields: [schoolId], references: [id])
+  schoolId  String?
+  school    School?  @relation(fields: [schoolId], references: [id])
   email     String   @unique
   phone     String?
   passwordHash String?      // if not using an external auth provider
   role      Role
   isActive  Boolean  @default(true)
+  status    String   @default("ACTIVE") // "ACTIVE" | "PENDING_VERIFICATION" | "PENDING_APPROVAL" | "SUSPENDED" | "DEACTIVATED"
+  emailVerified DateTime?
+  mfaEnabled       Boolean   @default(false)
+  mfaSecret        String?   // Base32 TOTP secret
+  mfaRecoveryCodes String[]  @default([])
   createdAt DateTime @default(now())
 
   // Optional links depending on role
   teacherProfile Teacher?
-  parentProfile  Parent?
+  parentProfiles Parent[]
   certificatesIssued CertificateLog[]
   leaveRequests LeaveRequest[] @relation("StaffLeaveRequests")
   leavesApproved LeaveRequest[] @relation("LeaveApprover")
+  usedTotpTokens UsedTotpToken[]
+  notifications Notification[]
 
   @@index([schoolId, role])
 }
@@ -185,6 +201,7 @@ model Student {
   isActive      Boolean  @default(true) // false = withdrawn/graduated, don't hard-delete
   photoUrl      String?
   classDesignation String? // e.g. "Class Monitor", "Sports Captain", "Prefect"
+  parentEmail      String? // Primary parent contact email for self-registration auto-linking
 
   // Admission details (optional informational fields)
   gender                    String?
@@ -209,6 +226,9 @@ model Student {
   emergencyContactName      String?
   emergencyContactPhone     String?
   medicalConditions         String?
+  archivedAt                DateTime?
+  archivedReason            String?   // "GRADUATED" | "WITHDRAWN" | "TRANSFERRED" | "OTHER"
+  archivedByUserId          String?
 
   parents       StudentParent[]
   attendance    Attendance[]
@@ -216,6 +236,7 @@ model Student {
   invoices      FeeInvoice[]
   reportCards   ReportCard[]
   certificateLogs CertificateLog[]
+  parentLinkRequests ParentStudentLinkRequest[]
 
   @@unique([schoolId, admissionNo])
   @@index([schoolId, sectionId])
@@ -225,14 +246,20 @@ model Parent {
   id       String   @id @default(cuid())
   schoolId String
   school   School   @relation(fields: [schoolId], references: [id])
-  userId   String   @unique
-  user     User     @relation(fields: [userId], references: [id])
+  userId   String?
+  user     User?    @relation(fields: [userId], references: [id])
   fullName String
+  email    String?
   phone    String
 
   students StudentParent[]
+  linkRequests ParentStudentLinkRequest[]
 
+  @@unique([schoolId, email])
+  @@unique([schoolId, userId])
   @@index([schoolId])
+  @@index([email])
+  @@index([userId])
 }
 
 // Explicit join table — handles multiple guardians per student
@@ -565,3 +592,231 @@ model Assignment {
   @@index([schoolId, teacherId])
   @@index([subjectId])
 }
+
+// ------------------------------------------------------------
+// Platform Administration & Multi-School Governance
+// ------------------------------------------------------------
+
+model SchoolRegistrationRequest {
+  id              String    @id @default(cuid())
+  schoolName      String
+  boardType       String    // "CBSE" | "ICSE" | "STATE" | etc.
+  officialEmail   String    @unique
+  phone           String
+  address         String?
+  principalName   String
+  affiliationNo   String?
+  adminEmail      String
+  adminName       String
+  adminPhone      String?
+  adminPasswordHash String? // bcrypt hash stored until Super Admin approves
+  documentUrl     String?   // Uploaded affiliation certificate / trust deed document URL
+  documentName    String?   // Original uploaded file name
+  status          String    @default("PENDING") // "PENDING" | "APPROVED" | "REJECTED"
+  rejectionReason String?
+  emailVerifiedAt DateTime?
+  approvedAt      DateTime?
+  approvedByUserId String?
+  schoolId        String?   // Linked school ID after Super Admin approval
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([status])
+  @@index([adminEmail])
+}
+
+model EmailVerificationToken {
+  id        String    @id @default(cuid())
+  email     String
+  token     String    @unique
+  type      String    // "SCHOOL_REGISTRATION" | "PARENT_SIGNUP" | "STAFF_INVITATION" | "PASSWORD_RESET"
+  expiresAt DateTime
+  usedAt    DateTime?
+  metadata  String?   // Optional JSON payload (e.g. pending roles, temp data)
+  createdAt DateTime  @default(now())
+
+  @@index([email, type])
+  @@index([token])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  schoolId   String?  // null for platform-level operations
+  userId     String?  // Actor user ID
+  userEmail  String?  // Actor email
+  action     String   // e.g. "SCHOOL_REGISTRATION_SUBMITTED", "SCHOOL_APPROVED", "SCHOOL_SUSPENDED", "STAFF_INVITED"
+  targetType String   // e.g. "School", "User", "SchoolRegistrationRequest"
+  targetId   String?
+  details    String?  // JSON string
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  @@index([schoolId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+// ------------------------------------------------------------
+// Platform Security & Distributed Authentication Defense
+// ------------------------------------------------------------
+
+model UsedTotpToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  step      BigInt   // TOTP 30s counter step
+  codeHash  String   // SHA-256 derived identifier of (userId + ":" + step + ":" + code)
+  expiresAt DateTime // Window expiration timestamp (e.g. now + 90s)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, step])
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model LoginAttempt {
+  id              String   @id @default(cuid())
+  identifier      String   @unique // Normalized login identifier (e.g. "login:user@example.com")
+  attempts        Int      @default(1)
+  windowExpiresAt DateTime // Expiration timestamp for current rate-limit rolling window
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([identifier])
+  @@index([windowExpiresAt])
+}
+
+// ------------------------------------------------------------
+// SaaS Subscriptions & Tiered Pricing
+// ------------------------------------------------------------
+
+model SubscriptionPlan {
+  id                   String   @id @default(cuid())
+  name                 String   // "Starter", "Professional", "Enterprise"
+  code                 String   @unique // "STARTER", "PROFESSIONAL", "ENTERPRISE"
+  description          String?
+  pricePerStudentMonth Decimal  @db.Decimal(10, 2)
+  pricePerStudentYear  Decimal  @db.Decimal(10, 2)
+  minStudents          Int      @default(50)
+  maxStudents          Int?
+  features             String[] @default([])
+  isActive             Boolean  @default(true)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  subscriptions Subscription[]
+}
+
+model Subscription {
+  id                     String            @id @default(cuid())
+  schoolId               String            @unique
+  school                 School            @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  planId                 String?
+  plan                   SubscriptionPlan? @relation(fields: [planId], references: [id])
+  status                 String            @default("TRIALING") // "TRIALING" | "ACTIVE" | "PAST_DUE" | "EXPIRED" | "CANCELLED"
+  billingCycle           String            @default("ANNUAL") // "MONTHLY" | "ANNUAL"
+  studentCount           Int               @default(0)
+  amount                 Decimal           @default(0) @db.Decimal(10, 2)
+  currency               String            @default("INR")
+  trialStartsAt          DateTime          @default(now())
+  trialEndsAt            DateTime
+  currentPeriodStart     DateTime          @default(now())
+  currentPeriodEnd       DateTime
+  cancelAtPeriodEnd      Boolean           @default(false)
+  razorpaySubscriptionId String?
+  createdAt              DateTime          @default(now())
+  updatedAt              DateTime          @updatedAt
+
+  @@index([status])
+  @@index([trialEndsAt])
+  @@index([currentPeriodEnd])
+}
+
+// ------------------------------------------------------------
+// Parent-Student Link Approval Workflow
+// ------------------------------------------------------------
+
+model ParentStudentLinkRequest {
+  id               String    @id @default(cuid())
+  schoolId         String
+  school           School    @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  parentId         String
+  parent           Parent    @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  studentId        String
+  student          Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  relationship     String    @default("GUARDIAN") // "FATHER" | "MOTHER" | "GUARDIAN"
+  status           String    @default("PENDING") // "PENDING" | "APPROVED" | "REJECTED"
+  rejectionReason  String?
+  proofDocumentUrl String?
+  requestedAt      DateTime  @default(now())
+  reviewedAt       DateTime?
+  reviewedByUserId String?
+
+  @@unique([schoolId, parentId, studentId])
+  @@index([schoolId, status])
+}
+
+// ------------------------------------------------------------
+// In-App & Multi-Channel Notifications
+// ------------------------------------------------------------
+
+model Notification {
+  id        String    @id @default(cuid())
+  schoolId  String?
+  school    School?   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  message   String
+  type      String    // "REGISTRATION" | "APPROVAL" | "SUBSCRIPTION" | "PAYMENT" | "ACADEMIC" | "SYSTEM"
+  linkUrl   String?
+  isRead    Boolean   @default(false)
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, isRead])
+  @@index([schoolId])
+  @@index([createdAt])
+}
+
+// ------------------------------------------------------------
+// Webhook Idempotency & Event Auditing
+// ------------------------------------------------------------
+
+model WebhookEvent {
+  id           String   @id @default(cuid())
+  gateway      String   @default("RAZORPAY")
+  eventId      String   @unique
+  eventType    String
+  payload      String   @db.Text
+  status       String   @default("PROCESSED") // "PROCESSED" | "FAILED" | "IGNORED"
+  errorMessage String?
+  createdAt    DateTime @default(now())
+
+  @@index([gateway, eventType])
+}
+
+// ------------------------------------------------------------
+// Private Document Storage & Retention
+// ------------------------------------------------------------
+
+model Document {
+  id               String   @id @default(cuid())
+  schoolId         String
+  school           School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  title            String
+  category         String   // "REGISTRATION", "STUDENT_RECORD", "TC", "RECEIPT", "POLICY", "BACKUP"
+  fileKey          String
+  fileName         String
+  fileSize         Int      // in bytes
+  mimeType         String
+  isPrivate        Boolean  @default(true)
+  uploadedByUserId String?
+  createdAt        DateTime @default(now())
+
+  @@index([schoolId, category])
+}
+
+
+
+

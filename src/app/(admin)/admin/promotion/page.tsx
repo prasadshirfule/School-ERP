@@ -46,19 +46,31 @@ export default function StudentPromotionPage() {
 
   useEffect(() => {
     if (!sourceSectionId) return;
-    setLoading(true);
-    fetch(`/api/students?sectionId=${sourceSectionId}`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (Array.isArray(data)) {
-          setStudents(data);
-          setSelectedStudentIds(new Set(data.map((s: Student) => s.id)));
-        } else {
-          setStudents([]);
+    let ignore = false;
+
+    async function loadStudents() {
+      try {
+        const res = await fetch(`/api/students?sectionId=${sourceSectionId}`);
+        if (!ignore && res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data)) {
+            setStudents(data);
+            setSelectedStudentIds(new Set(data.map((s: Student) => s.id)));
+          } else {
+            setStudents([]);
+          }
         }
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
+      } catch {
+        if (!ignore) setStudents([]);
+      } finally {
+        if (!ignore) setLoading(false);
+      }
+    }
+
+    loadStudents();
+    return () => {
+      ignore = true;
+    };
   }, [sourceSectionId]);
 
   const toggleSelectAll = () => {
@@ -83,7 +95,7 @@ export default function StudentPromotionPage() {
     }
 
     if ((action === "PROMOTE" || action === "RETAIN") && !targetSectionId) {
-      toast.error("Please select a target section.");
+      toast.error("Please select a target destination section.");
       return;
     }
 
@@ -112,35 +124,37 @@ export default function StudentPromotionPage() {
       const refreshedData = await refreshRes.json();
       setStudents(Array.isArray(refreshedData) ? refreshedData : []);
       setSelectedStudentIds(new Set());
-    } catch (err: any) {
-      toast.error(err.message || "Failed to process promotion");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to process promotion");
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
-    <div>
-      <div className="page-header">
+    <div className="office-page-container">
+      {/* ─── Header ─── */}
+      <div className="office-header">
         <div>
-          <h1 className="page-title">Year-End Student Promotion & Rollover</h1>
-          <p className="page-subtitle">
-            Promote cohorts to the next grade, retain students, or graduate outgoing batches with historical record preservation.
+          <h1 className="office-title">Year-End Student Promotion &amp; Rollover</h1>
+          <p className="office-subtitle">
+            Promote student cohorts to the next grade level, retain students, or graduate outgoing batches
           </p>
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "340px 1fr", gap: "24px", alignItems: "flex-start" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "360px 1fr", gap: "24px", alignItems: "flex-start" }}>
         {/* Promotion Controls */}
-        <div className="card" style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-          <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 600 }}>Promotion Workflow</h3>
+        <div className="office-card" style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+          <h3 className="office-card-title">Promotion Parameters</h3>
 
-          <div>
-            <label className="form-label">Current Section (Source)</label>
+          <div className="office-form-group">
+            <label className="office-form-label">Current Classroom Section (Source)</label>
             <select
-              className="form-control"
+              className="office-select"
               value={sourceSectionId}
               onChange={(e) => setSourceSectionId(e.target.value)}
+              style={{ width: "100%" }}
             >
               {sections.map((s) => (
                 <option key={s.id} value={s.id}>
@@ -150,12 +164,12 @@ export default function StudentPromotionPage() {
             </select>
           </div>
 
-          <div>
-            <label className="form-label">Action Type</label>
+          <div className="office-form-group">
+            <label className="office-form-label">Promotion Action</label>
             <div style={{ display: "flex", gap: "8px" }}>
               <button
                 type="button"
-                className={`btn btn-sm ${action === "PROMOTE" ? "btn-primary" : "btn-secondary"}`}
+                className={`office-btn office-btn-sm ${action === "PROMOTE" ? "office-btn-primary" : "office-btn-secondary"}`}
                 style={{ flex: 1 }}
                 onClick={() => setAction("PROMOTE")}
               >
@@ -163,7 +177,7 @@ export default function StudentPromotionPage() {
               </button>
               <button
                 type="button"
-                className={`btn btn-sm ${action === "RETAIN" ? "btn-primary" : "btn-secondary"}`}
+                className={`office-btn office-btn-sm ${action === "RETAIN" ? "office-btn-primary" : "office-btn-secondary"}`}
                 style={{ flex: 1 }}
                 onClick={() => setAction("RETAIN")}
               >
@@ -171,7 +185,7 @@ export default function StudentPromotionPage() {
               </button>
               <button
                 type="button"
-                className={`btn btn-sm ${action === "GRADUATE" ? "btn-primary" : "btn-secondary"}`}
+                className={`office-btn office-btn-sm ${action === "GRADUATE" ? "office-btn-primary" : "office-btn-secondary"}`}
                 style={{ flex: 1 }}
                 onClick={() => setAction("GRADUATE")}
               >
@@ -181,14 +195,15 @@ export default function StudentPromotionPage() {
           </div>
 
           {action !== "GRADUATE" && (
-            <div>
-              <label className="form-label">Target Section</label>
+            <div className="office-form-group">
+              <label className="office-form-label">Target Destination Section</label>
               <select
-                className="form-control"
+                className="office-select"
                 value={targetSectionId}
                 onChange={(e) => setTargetSectionId(e.target.value)}
+                style={{ width: "100%" }}
               >
-                <option value="">-- Select Destination Section --</option>
+                <option value="">-- Choose Target Section --</option>
                 {sections.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.class.name} — Section {s.name}
@@ -198,99 +213,121 @@ export default function StudentPromotionPage() {
             </div>
           )}
 
-          <div>
-            <label className="form-label">New Academic Year</label>
+          <div className="office-form-group">
+            <label className="office-form-label">New Academic Session</label>
             <input
               type="text"
-              className="form-control"
+              className="office-input"
               value={targetAcademicYear}
               onChange={(e) => setTargetAcademicYear(e.target.value)}
               placeholder="e.g. 2027-28"
+              style={{ width: "100%" }}
             />
           </div>
 
           <button
             type="button"
-            className="btn btn-primary"
-            style={{ width: "100%", justifyContent: "center", marginTop: "8px" }}
+            className="office-btn office-btn-primary"
+            style={{ width: "100%", justifyContent: "center", height: "44px" }}
             onClick={handlePromote}
             disabled={submitting || selectedStudentIds.size === 0}
           >
             {submitting ? (
               <>
                 <Sparkles size={16} className="animate-spin" />
-                <span>Processing...</span>
+                <span>Processing Promotion...</span>
               </>
             ) : (
               <>
                 <UserCheck size={16} />
-                <span>Execute {action} ({selectedStudentIds.size})</span>
+                <span>
+                  Execute {action} ({selectedStudentIds.size} Selected)
+                </span>
               </>
             )}
           </button>
         </div>
 
-        {/* Student Selection Table */}
-        <div className="card" style={{ padding: "0" }}>
-          <div style={{ padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--border-color)" }}>
-            <div style={{ fontWeight: 600, fontSize: "0.95rem" }}>
-              Students in Selected Section ({students.length})
+        {/* Student Roster Selection Table */}
+        <div className="office-card" style={{ padding: 0, overflow: "hidden" }}>
+          <div
+            style={{
+              padding: "16px 20px",
+              background: "#f8fafc",
+              borderBottom: "1px solid #e2e8f0",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
+            <div>
+              <div style={{ fontSize: "15px", fontWeight: 700, color: "#0f172a" }}>
+                Students in Current Section ({students.length})
+              </div>
+              <div style={{ fontSize: "12px", color: "#64748b" }}>
+                Select students to include in this rollover operation
+              </div>
             </div>
-            <button
-              type="button"
-              onClick={toggleSelectAll}
-              className="btn btn-secondary btn-sm"
-            >
-              {selectedStudentIds.size === students.length ? "Deselect All" : "Select All"}
-            </button>
+            {students.length > 0 && (
+              <button
+                type="button"
+                onClick={toggleSelectAll}
+                className="office-btn office-btn-secondary office-btn-sm"
+              >
+                {selectedStudentIds.size === students.length ? "Deselect All" : "Select All"}
+              </button>
+            )}
           </div>
 
           {loading ? (
-            <div className="loading" style={{ padding: "30px" }}>
-              <Sparkles size={18} className="animate-spin" /> Loading section roster...
+            <div style={{ padding: "40px", textAlign: "center", color: "#64748b" }}>
+              <Sparkles size={20} className="animate-spin" color="#1e3a8a" style={{ margin: "0 auto 8px" }} />
+              <span>Loading student roster...</span>
             </div>
           ) : students.length === 0 ? (
-            <div style={{ padding: "40px 20px", textAlign: "center", color: "var(--text-muted)" }}>
-              No active students found in this section.
+            <div style={{ padding: "40px", textAlign: "center", color: "#64748b" }}>
+              No students found in this section.
             </div>
           ) : (
-            <div className="table-responsive">
-              <table className="table">
+            <div className="office-table-wrapper" style={{ border: "none", borderRadius: 0 }}>
+              <table className="office-table">
                 <thead>
                   <tr>
-                    <th style={{ width: "40px" }}>
-                      <input
-                        type="checkbox"
-                        checked={selectedStudentIds.size === students.length && students.length > 0}
-                        onChange={toggleSelectAll}
-                      />
-                    </th>
-                    <th>Admission No</th>
-                    <th>Roll</th>
-                    <th>Student Name</th>
-                    <th>Current Session</th>
+                    <th style={{ width: "50px" }}>Select</th>
+                    <th>Roll #</th>
+                    <th>Adm. No.</th>
+                    <th>Full Name</th>
+                    <th>Session</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {students.map((s) => (
-                    <tr
-                      key={s.id}
-                      onClick={() => toggleStudent(s.id)}
-                      style={{ cursor: "pointer", background: selectedStudentIds.has(s.id) ? "rgba(251, 113, 133, 0.04)" : "transparent" }}
-                    >
-                      <td onClick={(e) => e.stopPropagation()}>
-                        <input
-                          type="checkbox"
-                          checked={selectedStudentIds.has(s.id)}
-                          onChange={() => toggleStudent(s.id)}
-                        />
-                      </td>
-                      <td style={{ fontFamily: "monospace", fontSize: "0.85rem" }}>{s.admissionNo}</td>
-                      <td>{s.rollNumber || "—"}</td>
-                      <td style={{ fontWeight: 600 }}>{s.fullName}</td>
-                      <td style={{ color: "var(--text-secondary)" }}>{s.academicYear}</td>
-                    </tr>
-                  ))}
+                  {students.map((s) => {
+                    const isSelected = selectedStudentIds.has(s.id);
+                    return (
+                      <tr
+                        key={s.id}
+                        onClick={() => toggleStudent(s.id)}
+                        style={{ cursor: "pointer", background: isSelected ? "#eff6ff" : undefined }}
+                      >
+                        <td>
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => {}}
+                            style={{ width: "16px", height: "16px", cursor: "pointer" }}
+                          />
+                        </td>
+                        <td style={{ color: "#64748b" }}>{s.rollNumber || "—"}</td>
+                        <td style={{ fontFamily: "monospace", fontWeight: 600, color: "#1e3a8a" }}>
+                          {s.admissionNo}
+                        </td>
+                        <td style={{ fontWeight: 600, color: "#0f172a" }}>{s.fullName}</td>
+                        <td>
+                          <span className="office-pill office-pill-blue">{s.academicYear}</span>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

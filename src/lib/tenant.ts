@@ -11,7 +11,7 @@
  * to a different tenant school.
  */
 
-import { Prisma } from "@prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
 import prisma from "./prisma";
 
 /**
@@ -39,6 +39,10 @@ export const TENANT_SCOPED_MODELS = new Set([
   "Department",
   "LeaveRequest",
   "Assignment",
+  "Subscription",
+  "ParentStudentLinkRequest",
+  "Notification",
+  "Document",
 ]);
 
 /**
@@ -77,6 +81,23 @@ const CREATE_OPERATIONS = new Set([
   "createManyAndReturn",
 ]);
 
+type TenantDelegate = {
+  findFirst: (args: unknown) => Promise<Record<string, unknown> | null>;
+  [key: string]: unknown;
+};
+
+type ActivePrismaClient = PrismaClient & {
+  $parent?: ActivePrismaClient;
+};
+
+function getArgField(data: unknown, field: string): string | undefined {
+  if (data && typeof data === "object" && !Array.isArray(data) && field in data) {
+    const val = (data as Record<string, unknown>)[field];
+    return typeof val === "string" ? val : undefined;
+  }
+  return undefined;
+}
+
 /**
  * Creates a tenant-scoped Prisma Client.
  * Every query through this client is automatically filtered/injected
@@ -85,29 +106,45 @@ const CREATE_OPERATIONS = new Set([
  *
  * Supports an optional baseClient (such as an interactive transaction client tx).
  */
-export function tenantClient(schoolId: string, baseClient?: any) {
+export function tenantClient(schoolId: string, baseClient?: unknown) {
   if (!schoolId || typeof schoolId !== "string" || schoolId.trim() === "") {
     throw new Error("tenantClient requires a valid, non-empty schoolId");
   }
 
   const cleanSchoolId = schoolId.trim();
-  const rootOrTx = baseClient || prisma;
+  const rootOrTx = (baseClient || prisma) as ActivePrismaClient;
 
   return rootOrTx.$extends({
     name: "tenant-isolation",
     query: {
       $allModels: {
-        async $allOperations(this: any, { model, operation, args, query }: any) {
+        async $allOperations({
+          model,
+          operation,
+          args,
+          query,
+        }: {
+          model?: string;
+          operation: string;
+          args: Record<string, unknown> & {
+            data?: Record<string, unknown> | Record<string, unknown>[];
+            where?: Record<string, unknown>;
+            select?: Record<string, unknown> | boolean | null;
+            create?: Record<string, unknown>;
+            update?: Record<string, unknown>;
+          };
+          query: (args: unknown) => Promise<unknown>;
+        }) {
           // If School model or unhandled root, allow normal execution
           if (!model || model === "School") {
             return query(args);
           }
 
           // Resolve active client context (supporting interactive transactions & tx injection)
-          let activeClient: any = rootOrTx;
+          let activeClient: ActivePrismaClient = rootOrTx;
           try {
             if (this && typeof Prisma?.getExtensionContext === "function") {
-              const ctx = Prisma.getExtensionContext(this);
+              const ctx = Prisma.getExtensionContext(this) as ActivePrismaClient | undefined;
               if (ctx && typeof ctx.user?.findFirst === "function") {
                 activeClient = ctx;
               } else if (ctx && ctx.$parent && typeof ctx.$parent.user?.findFirst === "function") {
@@ -135,15 +172,15 @@ export function tenantClient(schoolId: string, baseClient?: any) {
                 operation === "createManyAndReturn"
               ) {
                 if (Array.isArray(args.data)) {
-                  args.data = args.data.map((d: any) => ({
+                  args.data = (args.data as Record<string, unknown>[]).map((d) => ({
                     ...d,
                     schoolId: cleanSchoolId,
                   }));
                 } else {
-                  args.data = { ...(args.data || {}), schoolId: cleanSchoolId };
+                  args.data = { ...((args.data as Record<string, unknown>) || {}), schoolId: cleanSchoolId };
                 }
               } else {
-                args.data = { ...(args.data || {}), schoolId: cleanSchoolId };
+                args.data = { ...((args.data as Record<string, unknown>) || {}), schoolId: cleanSchoolId };
               }
               return query(args);
             }
@@ -153,23 +190,25 @@ export function tenantClient(schoolId: string, baseClient?: any) {
               operation === "findUnique" ||
               operation === "findUniqueOrThrow"
             ) {
+              const selectObj = typeof args?.select === "object" && args.select !== null ? args.select : undefined;
               const hasSelect = Boolean(args?.select);
-              const hadSelectedSchoolId = Boolean(args?.select?.schoolId);
+              const hadSelectedSchoolId = Boolean(selectObj && "schoolId" in selectObj && selectObj.schoolId);
 
               let queryArgs = args;
               if (hasSelect && !hadSelectedSchoolId) {
                 queryArgs = {
                   ...args,
                   select: {
-                    ...args.select,
+                    ...(selectObj || {}),
                     schoolId: true,
                   },
                 };
               }
 
               const result = await query(queryArgs);
+              const recordWithSchool = result as { schoolId?: unknown };
 
-              if (result && (result as any).schoolId !== cleanSchoolId) {
+              if (result && recordWithSchool.schoolId !== cleanSchoolId) {
                 if (operation === "findUniqueOrThrow") {
                   throw new Prisma.PrismaClientKnownRequestError(
                     "Record not found (tenant boundary)",
@@ -184,7 +223,7 @@ export function tenantClient(schoolId: string, baseClient?: any) {
 
               // Strip injected schoolId if caller did not select it
               if (result && hasSelect && !hadSelectedSchoolId) {
-                delete (result as any).schoolId;
+                delete recordWithSchool.schoolId;
               }
 
               return result;
@@ -192,13 +231,14 @@ export function tenantClient(schoolId: string, baseClient?: any) {
 
             // UPDATE: verify target record belongs to this tenant and block changing schoolId
             if (operation === "update") {
-              if (args.data?.schoolId !== undefined) {
+              if (getArgField(args.data, "schoolId") !== undefined) {
                 throw new Error("Cannot modify schoolId through tenant client");
               }
               const modelAccessor =
                 model.charAt(0).toLowerCase() + model.slice(1);
               const whereClause = args.where;
-              const existing = await activeClient[modelAccessor].findFirst({
+              const activeDelegate = (activeClient as unknown as Record<string, TenantDelegate>)[modelAccessor];
+              const existing = await activeDelegate.findFirst({
                 where: { ...flattenWhere(whereClause), schoolId: cleanSchoolId },
                 select: { id: true },
               });
@@ -219,8 +259,8 @@ export function tenantClient(schoolId: string, baseClient?: any) {
               const { where, create, update } = args;
 
               if (
-                create?.schoolId !== undefined ||
-                update?.schoolId !== undefined
+                getArgField(create, "schoolId") !== undefined ||
+                getArgField(update, "schoolId") !== undefined
               ) {
                 throw new Error(
                   "Cannot set schoolId through tenant client — it is injected automatically"
@@ -232,12 +272,11 @@ export function tenantClient(schoolId: string, baseClient?: any) {
               const modelAccessor =
                 model.charAt(0).toLowerCase() + model.slice(1);
               // Unscoped check across tenants to prevent hijacking cross-tenant unique keys
-              const unscopedRow = await (rootOrTx as any)[
-                modelAccessor
-              ].findFirst({
-                where: flattenWhere(where),
+              const unscopedDelegate = (rootOrTx as unknown as Record<string, TenantDelegate>)[modelAccessor];
+              const unscopedRow = (await unscopedDelegate?.findFirst({
+                where: flattenWhere(where as Record<string, unknown>),
                 select: { id: true, schoolId: true },
-              });
+              })) as { id: string; schoolId?: string | null } | null;
               if (unscopedRow && unscopedRow.schoolId !== cleanSchoolId) {
                 throw new Prisma.PrismaClientKnownRequestError(
                   "Record not found (tenant boundary)",
@@ -256,7 +295,8 @@ export function tenantClient(schoolId: string, baseClient?: any) {
               const modelAccessor =
                 model.charAt(0).toLowerCase() + model.slice(1);
               const whereClause = args.where;
-              const existing = await activeClient[modelAccessor].findFirst({
+              const activeDelegate = (activeClient as unknown as Record<string, TenantDelegate>)[modelAccessor];
+              const existing = await activeDelegate.findFirst({
                 where: { ...flattenWhere(whereClause), schoolId: cleanSchoolId },
                 select: { id: true },
               });
@@ -336,7 +376,7 @@ export function tenantClient(schoolId: string, baseClient?: any) {
               }
 
               if (operation === "create") {
-                const userId = args.data?.userId;
+                const userId = getArgField(args.data, "userId");
                 if (userId) {
                   const user = await activeClient.user.findFirst({
                     where: { id: userId, schoolId: cleanSchoolId },
@@ -399,7 +439,8 @@ export function tenantClient(schoolId: string, baseClient?: any) {
 
               if (operation === "upsert") {
                 const { where, create } = args;
-                const studentId = create?.studentId || (where as any)?.studentId_subjectId_examName?.studentId;
+                const whereObj = where as Record<string, { studentId?: string } | undefined>;
+                const studentId = (create as { studentId?: string })?.studentId || whereObj?.studentId_subjectId_examName?.studentId;
                 if (studentId) {
                   const student = await activeClient.student.findFirst({
                     where: { id: studentId, schoolId: cleanSchoolId },
@@ -413,10 +454,10 @@ export function tenantClient(schoolId: string, baseClient?: any) {
                   }
                 }
 
-                const unscoped = await (rootOrTx as any).marks.findFirst({
-                  where: flattenWhere(where),
+                const unscoped = (await rootOrTx.marks.findFirst({
+                  where: flattenWhere(where as Record<string, unknown>),
                   include: { student: { select: { schoolId: true } } },
-                });
+                })) as { student?: { schoolId?: string | null }; studentId?: string } | null;
                 if (unscoped) {
                   const unscopedSchoolId = unscoped.student?.schoolId;
                   if (unscopedSchoolId) {
@@ -452,7 +493,7 @@ export function tenantClient(schoolId: string, baseClient?: any) {
               }
 
               if (operation === "create") {
-                const studentId = args.data?.studentId;
+                const studentId = getArgField(args.data, "studentId");
                 if (studentId) {
                   const student = await activeClient.student.findFirst({
                     where: { id: studentId, schoolId: cleanSchoolId },
@@ -480,7 +521,7 @@ export function tenantClient(schoolId: string, baseClient?: any) {
               }
 
               if (operation === "create") {
-                const studentId = args.data?.studentId;
+                const studentId = getArgField(args.data, "studentId");
                 if (studentId) {
                   const student = await activeClient.student.findFirst({
                     where: { id: studentId, schoolId: cleanSchoolId },
@@ -508,7 +549,7 @@ export function tenantClient(schoolId: string, baseClient?: any) {
               }
 
               if (operation === "create" || operation === "upsert") {
-                const subjectId = args.data?.subjectId || args.create?.subjectId;
+                const subjectId = getArgField(args.data, "subjectId") || getArgField(args.create, "subjectId");
                 if (subjectId) {
                   const subject = await activeClient.subject.findFirst({
                     where: { id: subjectId, schoolId: cleanSchoolId },
@@ -538,9 +579,9 @@ export function tenantClient(schoolId: string, baseClient?: any) {
  * key like `{ schoolId_email: { schoolId, email } }`. This helper
  * flattens compound unique keys so we can add `schoolId` for a findFirst.
  */
-function flattenWhere(where: Record<string, any> | undefined): Record<string, any> {
+function flattenWhere(where: Record<string, unknown> | undefined): Record<string, unknown> {
   if (!where) return {};
-  const flat: Record<string, any> = {};
+  const flat: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(where)) {
     if (
       value !== null &&

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getTenantDb, unauthorized, badRequest } from "@/lib/utils";
+import { getTenantDb, unauthorized } from "@/lib/utils";
 
 /**
  * GET /api/search?q=...
@@ -20,11 +20,11 @@ export async function GET(request: Request) {
 
   // PARENT role: only search their own children, no access to invoices, classes, or staff
   if (role === "PARENT") {
-    const parent = await ctx.db.parent.findUnique({
+    const parent = await ctx.db.parent.findFirst({
       where: { userId: ctx.session.user.id },
       include: { students: { select: { studentId: true } } },
     });
-    const childIds = parent?.students.map((c: any) => c.studentId) || [];
+    const childIds = parent?.students.map((c) => c.studentId) || [];
 
     const students = await ctx.db.student.findMany({
       where: {
@@ -42,7 +42,7 @@ export async function GET(request: Request) {
     });
 
     return NextResponse.json({
-      students: students.map((s: any) => ({
+      students: students.map((s) => ({
         id: s.id,
         title: s.fullName,
         subtitle: `${s.section ? `${s.section.class.name}-${s.section.name}` : "Unassigned"} • Adm: ${s.admissionNo}`,
@@ -126,28 +126,28 @@ export async function GET(request: Request) {
   };
 
   return NextResponse.json({
-    students: students.map((s: any) => ({
+    students: students.map((s) => ({
       id: s.id,
       title: s.fullName,
       subtitle: `${s.section ? `${s.section.class.name}-${s.section.name}` : "Unassigned"} • Adm: ${s.admissionNo}`,
       href: getStudentHref(s.id),
       type: "Student",
     })),
-    teachers: teachers.map((t: any) => ({
+    teachers: teachers.map((t) => ({
       id: t.id,
       title: t.fullName,
       subtitle: `${t.department ? t.department.name : "Staff"} • ${t.user.email}`,
       href: `/admin/teachers`,
       type: "Teacher",
     })),
-    classes: classes.map((c: any) => ({
+    classes: classes.map((c) => ({
       id: c.id,
       title: c.name,
       subtitle: `${c.sections.length} Section(s)`,
       href: `/admin/classes`,
       type: "Class",
     })),
-    invoices: invoices.map((inv: any) => ({
+    invoices: invoices.map((inv) => ({
       id: inv.id,
       title: `${inv.student.fullName} — ${inv.feeStructure.name}`,
       subtitle: `Due: ₹${Number(inv.amountDue).toFixed(2)} • Status: ${inv.status}`,

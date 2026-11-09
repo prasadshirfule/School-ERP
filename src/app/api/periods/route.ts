@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { getTenantDb, unauthorized, badRequest, forbidden, hasRole } from "@/lib/utils";
 import { z } from "zod";
 
@@ -49,12 +50,13 @@ export async function POST(request: Request) {
 
   const period = await ctx.db.period.create({
     data: {
+      schoolId: ctx.session.user.schoolId,
       periodNumber,
       label,
       startTime,
       endTime,
       isBreak,
-    } as any,
+    },
   });
 
   return NextResponse.json(period, { status: 201 });
@@ -76,7 +78,7 @@ export async function PATCH(request: Request) {
   const existing = await ctx.db.period.findUnique({ where: { id } });
   if (!existing) return badRequest("Period not found");
 
-  const updateData: any = {};
+  const updateData: Prisma.PeriodUpdateInput = {};
   if (typeof body.label === "string") updateData.label = body.label.trim();
   if (typeof body.startTime === "string") updateData.startTime = body.startTime.trim();
   if (typeof body.endTime === "string") updateData.endTime = body.endTime.trim();

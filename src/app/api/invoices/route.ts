@@ -19,15 +19,15 @@ export async function GET(request: Request) {
   const status = searchParams.get("status");
   const studentId = searchParams.get("studentId");
 
-  const where: any = {};
-  if (status) where.status = status;
+  const where: Prisma.FeeInvoiceWhereInput = {};
+  if (status) where.status = status as Prisma.EnumInvoiceStatusFilter["equals"];
 
   if (role === "PARENT") {
-    const parent = await ctx.db.parent.findUnique({
+    const parent = await ctx.db.parent.findFirst({
       where: { userId: ctx.session.user.id },
       include: { students: { select: { studentId: true } } },
     });
-    const childIds = parent?.students.map((c: any) => c.studentId) || [];
+    const childIds = parent?.students.map((c) => c.studentId) || [];
 
     if (studentId) {
       if (!childIds.includes(studentId)) {
@@ -112,12 +112,13 @@ export async function POST(request: Request) {
 
   const invoice = await ctx.db.feeInvoice.create({
     data: {
+      schoolId: ctx.session.user.schoolId,
       studentId,
       feeStructureId,
       amountDue,
       discountAmount: discount,
       dueDate: new Date(dueDate),
-    } as any,
+    },
     include: { student: true, feeStructure: true },
   });
 

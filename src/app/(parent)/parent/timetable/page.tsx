@@ -11,6 +11,11 @@ type Slot = {
   subject: { id: string; name: string } | null;
   teacher: { id: string; fullName: string } | null;
 };
+type StudentChild = {
+  id: string;
+  fullName: string;
+  section?: { id: string; name: string } | null;
+};
 
 const DAYS = ["MON", "TUE", "WED", "THU", "FRI", "SAT"];
 const DAY_LABELS: Record<string, string> = { MON: "Mon", TUE: "Tue", WED: "Wed", THU: "Thu", FRI: "Fri", SAT: "Sat" };
@@ -23,28 +28,53 @@ export default function ParentTimetablePage() {
   const [childName, setChildName] = useState("");
 
   useEffect(() => {
-    // First, get parent's children to find the section
-    fetch("/api/parent/students")
-      .then((r) => r.json())
-      .then((students: any[]) => {
-        if (students.length > 0 && students[0].section?.id) {
-          setSectionId(students[0].section.id);
-          setChildName(students[0].fullName);
+    let ignore = false;
+    async function init() {
+      try {
+        const studentRes = await fetch("/api/parent/students");
+        if (studentRes.ok) {
+          const students: unknown = await studentRes.json();
+          const studentList = Array.isArray(students) ? (students as StudentChild[]) : [];
+          if (!ignore && studentList.length > 0 && studentList[0].section?.id) {
+            setSectionId(studentList[0].section.id);
+            setChildName(studentList[0].fullName);
+          }
         }
-        return fetch("/api/periods").then((r) => r.json());
-      })
-      .then((p) => {
-        setPeriods(Array.isArray(p) ? p : []);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
+        const periodRes = await fetch("/api/periods");
+        if (periodRes.ok && !ignore) {
+          const p: unknown = await periodRes.json();
+          setPeriods(Array.isArray(p) ? (p as Period[]) : []);
+        }
+      } catch (err) {
+        console.error("Failed to load timetable metadata", err);
+      } finally {
+        if (!ignore) setLoading(false);
+      }
+    }
+    init();
+    return () => {
+      ignore = true;
+    };
   }, []);
 
   useEffect(() => {
     if (!sectionId) return;
-    fetch(`/api/timetable?sectionId=${sectionId}&academicYear=2026-27`)
-      .then((r) => r.json())
-      .then((data) => setSlots(Array.isArray(data) ? data : []));
+    let ignore = false;
+    async function loadSlots() {
+      try {
+        const res = await fetch(`/api/timetable?sectionId=${sectionId}&academicYear=2026-27`);
+        if (res.ok && !ignore) {
+          const data: unknown = await res.json();
+          setSlots(Array.isArray(data) ? (data as Slot[]) : []);
+        }
+      } catch (err) {
+        console.error("Failed to load timetable slots", err);
+      }
+    }
+    loadSlots();
+    return () => {
+      ignore = true;
+    };
   }, [sectionId]);
 
   const getSlot = (day: string, periodId: string) => slots.find((s) => s.dayOfWeek === day && s.periodId === periodId);

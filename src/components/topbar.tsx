@@ -3,6 +3,7 @@
 import { signOut, useSession } from "next-auth/react";
 import { LogOut, User, Menu, Building, Calendar } from "lucide-react";
 import GlobalSearch from "@/components/GlobalSearch";
+import NotificationCenter from "@/components/notification-center";
 
 interface TopbarProps {
   onToggleMobile?: () => void;
@@ -41,6 +42,7 @@ export default function Topbar({ onToggleMobile, collapsed = false }: TopbarProp
         {session?.user && (
           <>
             <GlobalSearch />
+            <NotificationCenter />
             <div className="topbar-user hidden md:inline-flex">
               <User size={14} style={{ color: "var(--primary)" }} />
               <span style={{ maxWidth: "160px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>

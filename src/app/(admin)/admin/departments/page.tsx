@@ -80,7 +80,12 @@ export default function AdminDepartmentsPage() {
     try {
       const url = "/api/departments";
       const method = editingDept ? "PATCH" : "POST";
-      const payload: any = {
+      const payload: {
+        name: string;
+        headOfDepartmentId: string | null;
+        teacherIds: string[];
+        id?: string;
+      } = {
         name: name.trim(),
         headOfDepartmentId: hodId || null,
         teacherIds: selectedTeacherIds,
@@ -100,8 +105,8 @@ export default function AdminDepartmentsPage() {
 
       setShowModal(false);
       fetchData();
-    } catch (err: any) {
-      setError(err.message || "An unexpected error occurred");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "An unexpected error occurred");
     } finally {
       setSaving(false);
     }

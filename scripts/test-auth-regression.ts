@@ -468,8 +468,8 @@ async function runRegressionSuite() {
   console.log("\n--- 9. Multi-Tenant Scoping & Isolation Integrity ---");
 
   assert(
-    TENANT_SCOPED_MODELS.size === 21,
-    `TENANT_SCOPED_MODELS contains all 21 models (got ${TENANT_SCOPED_MODELS.size})`
+    TENANT_SCOPED_MODELS.size === 25,
+    `TENANT_SCOPED_MODELS contains all 25 models (got ${TENANT_SCOPED_MODELS.size})`
   );
 
   const client = tenantClient("sch_dpa_delhi");

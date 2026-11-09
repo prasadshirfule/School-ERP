@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getTenantDb, unauthorized, badRequest } from "@/lib/utils";
 import prisma from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 
 export async function GET() {
   const ctx = await getTenantDb();
@@ -71,7 +72,7 @@ export async function PATCH(request: Request) {
     return badRequest("School name cannot be empty");
   }
 
-  const updateData: Record<string, any> = {};
+  const updateData: Prisma.SchoolUpdateInput = {};
 
   if (name !== undefined) updateData.name = name.trim();
   if (boardType !== undefined) updateData.boardType = boardType.trim() || "CBSE";
@@ -131,7 +132,8 @@ export async function PATCH(request: Request) {
     });
 
     return NextResponse.json(updated);
-  } catch (error: any) {
-    return badRequest(error.message || "Failed to update school settings");
+  } catch (error: unknown) {
+    const errorMsg = error instanceof Error ? error.message : "Failed to update school settings";
+    return badRequest(errorMsg);
   }
 }

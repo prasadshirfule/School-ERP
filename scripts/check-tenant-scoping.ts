@@ -14,13 +14,33 @@
 import { Prisma } from "@prisma/client";
 import { TENANT_SCOPED_MODELS, RELATIONALLY_SCOPED_MODELS, ALL_SCOPED_MODELS } from "../src/lib/tenant";
 
+/**
+ * Platform-level models that are not scoped to an individual school tenant.
+ * - School: Tenant root itself
+ * - SchoolRegistrationRequest: Public onboarding queue reviewed only by Super Admin
+ * - EmailVerificationToken: Ephemeral security tokens for onboarding / registration
+ * - AuditLog: Platform-wide and tenant security audit logs
+ * - UsedTotpToken: Distributed TOTP replay prevention tracking
+ * - LoginAttempt: Distributed serverless rate-limiting tracking
+ */
+export const PLATFORM_MODELS = new Set([
+  "School",
+  "SchoolRegistrationRequest",
+  "EmailVerificationToken",
+  "AuditLog",
+  "UsedTotpToken",
+  "LoginAttempt",
+  "SubscriptionPlan",
+  "WebhookEvent",
+]);
+
 function main() {
   const models = Prisma.dmmf.datamodel.models;
   const missingDirect: string[] = [];
   const unaccounted: string[] = [];
 
   for (const model of models) {
-    if (model.name === "School") continue; // Tenant root
+    if (PLATFORM_MODELS.has(model.name)) continue; // Platform models
 
     const hasSchoolId = model.fields.some(
       (f: { name: string; kind: string }) => f.name === "schoolId" && f.kind === "scalar"

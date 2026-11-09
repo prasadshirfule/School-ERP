@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { getTenantDb, unauthorized, badRequest, forbidden, hasRole } from "@/lib/utils";
 
 export async function GET(request: Request) {
@@ -9,7 +10,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const forRole = searchParams.get("role");
 
-  const where: any = {};
+  const where: Prisma.NoticeWhereInput = {};
   if (userRole !== "ADMIN" && userRole !== "PRINCIPAL") {
     // Non-admins can only see notices directed to their role
     where.audience = { has: userRole };
@@ -42,10 +43,11 @@ export async function POST(request: Request) {
 
   const notice = await ctx.db.notice.create({
     data: {
+      schoolId: ctx.session.user.schoolId,
       title,
       body: noticeBody,
       audience,
-    } as any,
+    },
   });
 
   return NextResponse.json(notice, { status: 201 });

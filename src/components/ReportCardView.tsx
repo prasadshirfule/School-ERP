@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { Printer, Download, X, FileText, Loader2 } from "lucide-react";
-import { formatDate } from "@/lib/utils";
+import { formatDate } from "@/lib/formatDate";
 
 export interface ReportCardPayload {
   student: {

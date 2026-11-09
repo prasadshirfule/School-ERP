@@ -23,7 +23,7 @@ export async function GET(
 
   // 1. Authorization check
   if (role === "PARENT") {
-    const parent = await db.parent.findUnique({
+    const parent = await db.parent.findFirst({
       where: { userId: session.user.id },
       include: { students: true },
     });

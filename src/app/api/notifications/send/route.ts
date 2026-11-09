@@ -136,7 +136,7 @@ export async function POST(req: NextRequest) {
       }
     } else {
       // CLASS_SECTION or ALL_PARENTS
-      const whereClause: any = { isActive: true };
+      const whereClause: Prisma.StudentWhereInput = { isActive: true };
       if (sectionId) {
         whereClause.sectionId = sectionId;
       } else if (classId) {

@@ -3,13 +3,9 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
-  CheckCircle2,
-  Calendar,
   AlertCircle,
   Sparkles,
   Check,
-  X,
-  Clock,
   ArrowLeft,
   Users,
   Save,
@@ -19,13 +15,6 @@ type SectionOption = { id: string; name: string; class: { name: string } };
 type StudentData = { id: string; fullName: string; admissionNo: string };
 
 const STATUSES = ["PRESENT", "ABSENT", "LATE", "HALF_DAY", "LEAVE"] as const;
-const STATUS_COLORS: Record<string, string> = {
-  PRESENT: "badge-success",
-  ABSENT: "badge-danger",
-  LATE: "badge-warning",
-  HALF_DAY: "badge-warning",
-  LEAVE: "badge-info",
-};
 
 export default function AdminAttendancePage() {
   const [sections, setSections] = useState<SectionOption[]>([]);
@@ -33,7 +22,6 @@ export default function AdminAttendancePage() {
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [students, setStudents] = useState<StudentData[]>([]);
   const [attendance, setAttendance] = useState<Record<string, string>>({});
-  const [existing, setExisting] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -53,38 +41,46 @@ export default function AdminAttendancePage() {
 
   useEffect(() => {
     if (!sectionId) return;
-    setLoading(true);
-    setMessage("");
-    setError("");
+    let ignore = false;
 
-    Promise.all([
-      fetch(`/api/students?sectionId=${sectionId}`).then((r) => r.json()),
-      fetch(`/api/attendance?sectionId=${sectionId}&date=${date}`).then((r) => r.json()),
-    ])
-      .then(([studentsData, attendanceData]) => {
+    async function loadAttendance() {
+      try {
+        const [studentsData, attendanceData] = await Promise.all([
+          fetch(`/api/students?sectionId=${sectionId}`).then((r) => r.json()),
+          fetch(`/api/attendance?sectionId=${sectionId}&date=${date}`).then((r) => r.json()),
+        ]);
+
+        if (ignore) return;
+
         const studentList = Array.isArray(studentsData) ? studentsData : [];
         setStudents(studentList);
 
         const att: Record<string, string> = {};
-        const ex = new Set<string>();
         if (Array.isArray(attendanceData)) {
           for (const rec of attendanceData) {
             att[rec.studentId] = rec.status;
-            ex.add(rec.studentId);
           }
         }
         for (const s of studentList) {
           if (!att[s.id]) att[s.id] = "PRESENT";
         }
         setAttendance(att);
-        setExisting(ex);
-        setLoading(false);
-      })
-      .catch((err) => {
-        console.error("Failed to load attendance", err);
-        setError("Failed to load attendance data for selected section");
-        setLoading(false);
-      });
+        setMessage("");
+        setError("");
+      } catch (err) {
+        if (!ignore) {
+          console.error("Failed to load attendance", err);
+          setError("Failed to load attendance data for selected section");
+        }
+      } finally {
+        if (!ignore) setLoading(false);
+      }
+    }
+
+    loadAttendance();
+    return () => {
+      ignore = true;
+    };
   }, [sectionId, date]);
 
   const handleSave = async () => {

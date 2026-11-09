@@ -4,11 +4,14 @@ import type { DefaultJWT } from "next-auth/jwt";
 
 declare module "next-auth" {
   interface Session {
+    error?: string;
     user: {
       id: string;
       role: Role;
       schoolId: string;
       schoolName?: string;
+      mfaEnrolled?: boolean;
+      isRestricted?: boolean;
     } & DefaultSession["user"];
   }
 
@@ -16,6 +19,8 @@ declare module "next-auth" {
     role: Role;
     schoolId: string;
     schoolName?: string;
+    mfaEnrolled?: boolean;
+    isRestricted?: boolean;
   }
 }
 
@@ -25,5 +30,7 @@ declare module "next-auth/jwt" {
     role: Role;
     schoolId: string;
     schoolName?: string;
+    mfaEnrolled?: boolean;
+    isRestricted?: boolean;
   }
 }

@@ -41,7 +41,7 @@ export async function GET(
 
   // If PARENT: ensure the payment belongs to one of their linked children
   if (session.user.role === "PARENT") {
-    const parent = await db.parent.findUnique({
+    const parent = await db.parent.findFirst({
       where: { userId: session.user.id },
       include: {
         students: {
@@ -50,7 +50,7 @@ export async function GET(
       },
     });
 
-    const childIds = parent?.students.map((c: any) => c.studentId) || [];
+    const childIds = parent?.students.map((c) => c.studentId) || [];
     if (!childIds.includes(payment.invoice.studentId)) {
       return NextResponse.json({ error: "Payment not found" }, { status: 404 });
     }

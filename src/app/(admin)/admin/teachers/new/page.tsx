@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
-  GraduationCap,
   ArrowLeft,
   Mail,
   Phone,
@@ -13,7 +12,6 @@ import {
   CheckCircle2,
   AlertCircle,
   Save,
-  Sparkles,
 } from "lucide-react";
 
 export default function NewTeacherPage() {

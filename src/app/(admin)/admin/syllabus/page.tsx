@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CalendarClock, Sparkles, BookOpen, CheckCircle2, Plus, Trash2, X, Save, AlertCircle } from "lucide-react";
+import { Sparkles, BookOpen, CheckCircle2, Plus, Trash2, X, Save, AlertCircle } from "lucide-react";
 
 type ClassItem = { id: string; name: string };
 type Subject = { id: string; name: string };
@@ -41,13 +41,32 @@ export default function AdminSyllabusPage() {
 
   const fetchTopics = () => {
     if (!selectedClass || !selectedSubject) { setTopics([]); return; }
-    setLoadingTopics(true);
     fetch(`/api/syllabus?classId=${selectedClass}&subjectId=${selectedSubject}&academicYear=${academicYear}`)
       .then((r) => r.json())
       .then((data) => { setTopics(Array.isArray(data) ? data : []); setLoadingTopics(false); });
   };
 
-  useEffect(() => { fetchTopics(); }, [selectedClass, selectedSubject, academicYear]);
+  useEffect(() => {
+    if (!selectedClass || !selectedSubject) {
+      return;
+    }
+    let ignore = false;
+    fetch(`/api/syllabus?classId=${selectedClass}&subjectId=${selectedSubject}&academicYear=${academicYear}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (!ignore) {
+          setTopics(Array.isArray(data) ? data : []);
+          setLoadingTopics(false);
+        }
+      })
+      .catch(() => {
+        if (!ignore) setLoadingTopics(false);
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [selectedClass, selectedSubject, academicYear]);
 
   const handleAddTopic = async () => {
     if (!newTitle.trim()) { setError("Topic title is required"); return; }

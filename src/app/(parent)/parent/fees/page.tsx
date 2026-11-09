@@ -2,7 +2,17 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Receipt, CreditCard, Sparkles, CheckCircle2, Clock, Download, ShieldCheck, X } from "lucide-react";
+import {
+  Receipt,
+  CreditCard,
+  Sparkles,
+  CheckCircle2,
+  Clock,
+  Printer,
+  ShieldCheck,
+  X,
+  AlertCircle,
+} from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/components/ui/Toast";
 
@@ -52,7 +62,6 @@ function FeesContent() {
   const [isProcessing, setIsProcessing] = useState(false);
 
   const fetchInvoices = (studentId: string) => {
-    setLoading(true);
     fetch(`/api/parent/students/${studentId}/invoices`)
       .then((r) => r.json())
       .then((data) => {
@@ -63,24 +72,44 @@ function FeesContent() {
   };
 
   useEffect(() => {
+    let ignore = false;
     fetch("/api/parent/students")
       .then((r) => r.json())
       .then((data: Student[]) => {
-        if (Array.isArray(data)) {
+        if (!ignore && Array.isArray(data)) {
           setStudents(data);
           if (!selectedStudentId && data.length > 0) {
             setSelectedStudentId(data[0].id);
           }
         }
-      });
+      })
+      .catch(() => {});
+
+    return () => {
+      ignore = true;
+    };
   }, [selectedStudentId]);
 
   useEffect(() => {
     if (!selectedStudentId) {
-      setLoading(false);
       return;
     }
-    fetchInvoices(selectedStudentId);
+    let ignore = false;
+    fetch(`/api/parent/students/${selectedStudentId}/invoices`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (!ignore) {
+          setInvoices(Array.isArray(data) ? data : []);
+          setLoading(false);
+        }
+      })
+      .catch(() => {
+        if (!ignore) setLoading(false);
+      });
+
+    return () => {
+      ignore = true;
+    };
   }, [selectedStudentId]);
 
   const selectedStudent = students.find((s) => s.id === selectedStudentId);
@@ -103,7 +132,8 @@ function FeesContent() {
 
   const loadRazorpayScript = (): Promise<boolean> => {
     return new Promise((resolve) => {
-      if (typeof window !== "undefined" && (window as any).Razorpay) {
+      const win = window as unknown as { Razorpay?: unknown };
+      if (typeof window !== "undefined" && win.Razorpay) {
         resolve(true);
         return;
       }
@@ -135,7 +165,7 @@ function FeesContent() {
         throw new Error(orderData.error || "Failed to create payment order");
       }
 
-      // Offline development sandbox fallback: ONLY allowed when server returns isMock=true
+      // Sandbox fallback if server has mock mode
       if (orderData.isMock) {
         const mockPaymentId = `pay_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
         const mockSignature = `mock_sig_${mockPaymentId}`;
@@ -166,7 +196,7 @@ function FeesContent() {
         return;
       }
 
-      // 2. Load official Razorpay Checkout SDK for live/test checkout
+      // 2. Load official Razorpay Checkout SDK
       const scriptLoaded = await loadRazorpayScript();
       if (!scriptLoaded) {
         throw new Error("Unable to load Razorpay payment gateway. Please check your internet connection.");
@@ -208,8 +238,8 @@ function FeesContent() {
             if (selectedStudentId) {
               fetchInvoices(selectedStudentId);
             }
-          } catch (verifyErr: any) {
-            addToast("error", verifyErr.message || "Payment verification failed");
+          } catch (verifyErr: unknown) {
+            addToast("error", verifyErr instanceof Error ? verifyErr.message : "Payment verification failed");
           } finally {
             setIsProcessing(false);
           }
@@ -227,174 +257,253 @@ function FeesContent() {
         },
       };
 
-      const rzp = new (window as any).Razorpay(options);
-      rzp.on("payment.failed", function (response: any) {
+      type RazorpayConstructor = new (opts: unknown) => {
+        open: () => void;
+        on: (event: string, handler: (res: { error?: { description?: string } }) => void) => void;
+      };
+      const RazorpayClass = (window as unknown as { Razorpay: RazorpayConstructor }).Razorpay;
+      const rzp = new RazorpayClass(options);
+      rzp.on("payment.failed", function (response: { error?: { description?: string } }) {
         setIsProcessing(false);
         addToast("error", response.error?.description || "Payment failed");
       });
       rzp.open();
-    } catch (err: any) {
-      addToast("error", err.message || "Payment transaction failed");
+    } catch (err: unknown) {
+      addToast("error", err instanceof Error ? err.message : "Payment transaction failed");
       setIsProcessing(false);
     }
   };
 
   return (
-    <div>
-      <div className="page-header">
+    <div className="office-page-container">
+      {/* ─── Header ─── */}
+      <div className="office-header">
         <div>
-          <h1 className="page-title">Fees & Payment History</h1>
-          <p className="page-subtitle">Track outstanding balances, payment terms, and official fee receipts.</p>
+          <h1 className="office-title">School Fees & Payment History</h1>
+          <p className="office-subtitle">
+            View pending tuition fee schedules, make secure online payments, and download official receipts
+          </p>
         </div>
       </div>
 
+      {/* Child Switcher Tabs */}
       {students.length > 1 && (
-        <div style={{ display: "flex", gap: "10px", marginBottom: "20px" }}>
+        <div style={{ display: "flex", gap: "10px", marginBottom: "20px", flexWrap: "wrap" }}>
           {students.map((s) => (
             <button
               key={s.id}
               onClick={() => setSelectedStudentId(s.id)}
-              className={`btn ${selectedStudentId === s.id ? "btn-primary" : "btn-secondary"}`}
-              style={{ fontSize: "0.9rem" }}
+              className={`office-btn office-btn-sm ${selectedStudentId === s.id ? "office-btn-primary" : "office-btn-secondary"}`}
             >
-              {s.fullName} ({s.section ? `${s.section.class.name}-${s.section.name}` : "Enrolled"})
+              <span>{s.fullName}</span>
+              <span style={{ fontSize: "11px", opacity: 0.8 }}>
+                ({s.section ? `${s.section.class.name}-${s.section.name}` : "Enrolled"})
+              </span>
             </button>
           ))}
         </div>
       )}
 
-      {/* Summary KPI Cards */}
-      <div className="stats-grid" style={{ marginBottom: "24px" }}>
-        <div className="stat-card">
-          <div className="stat-icon-wrap stat-icon-coral">
+      {/* Financial Summary Cards */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+          gap: "14px",
+          marginBottom: "24px",
+        }}
+      >
+        <div
+          style={{
+            background: "#ffffff",
+            border: "1px solid #e2e8f0",
+            borderRadius: "10px",
+            padding: "16px",
+            display: "flex",
+            alignItems: "center",
+            gap: "14px",
+          }}
+        >
+          <div
+            style={{
+              width: "44px",
+              height: "44px",
+              borderRadius: "8px",
+              background: "#fffbeb",
+              color: "#d97706",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
             <Receipt size={22} />
           </div>
-          <div className="stat-info">
-            <span className="stat-value">₹{totalOutstanding.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
-            <span className="stat-label">Total Outstanding Balance</span>
+          <div>
+            <div style={{ fontSize: "12px", color: "#64748b", fontWeight: 600 }}>Total Outstanding Due</div>
+            <div style={{ fontSize: "20px", fontWeight: 700, color: "#d97706" }}>
+              ₹{totalOutstanding.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+            </div>
           </div>
         </div>
 
-        <div className="stat-card">
-          <div className="stat-icon-wrap stat-icon-teal">
+        <div
+          style={{
+            background: "#ffffff",
+            border: "1px solid #e2e8f0",
+            borderRadius: "10px",
+            padding: "16px",
+            display: "flex",
+            alignItems: "center",
+            gap: "14px",
+          }}
+        >
+          <div
+            style={{
+              width: "44px",
+              height: "44px",
+              borderRadius: "8px",
+              background: "#ecfdf5",
+              color: "#059669",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
             <CreditCard size={22} />
           </div>
-          <div className="stat-info">
-            <span className="stat-value">₹{totalPaid.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
-            <span className="stat-label">Total Paid to Date</span>
+          <div>
+            <div style={{ fontSize: "12px", color: "#64748b", fontWeight: 600 }}>Total Paid to Date</div>
+            <div style={{ fontSize: "20px", fontWeight: 700, color: "#059669" }}>
+              ₹{totalPaid.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+            </div>
           </div>
         </div>
 
-        <div className="stat-card">
-          <div className="stat-icon-wrap stat-icon-sky">
+        <div
+          style={{
+            background: "#ffffff",
+            border: "1px solid #e2e8f0",
+            borderRadius: "10px",
+            padding: "16px",
+            display: "flex",
+            alignItems: "center",
+            gap: "14px",
+          }}
+        >
+          <div
+            style={{
+              width: "44px",
+              height: "44px",
+              borderRadius: "8px",
+              background: "#eff6ff",
+              color: "#1e3a8a",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
             <Clock size={22} />
           </div>
-          <div className="stat-info">
-            <span className="stat-value">{invoices.length}</span>
-            <span className="stat-label">Total Invoices Issued</span>
+          <div>
+            <div style={{ fontSize: "12px", color: "#64748b", fontWeight: 600 }}>Invoices Issued</div>
+            <div style={{ fontSize: "20px", fontWeight: 700, color: "#1e3a8a" }}>
+              {invoices.length}
+            </div>
           </div>
         </div>
       </div>
 
       {loading ? (
-        <div className="loading">
-          <Sparkles size={18} className="animate-spin" /> Loading fee statements...
+        <div className="office-card" style={{ padding: "60px 20px", textAlign: "center" }}>
+          <Sparkles size={22} className="animate-spin" color="#1e3a8a" style={{ margin: "0 auto 8px" }} />
+          <div style={{ color: "#64748b", fontSize: "14px" }}>Loading fee invoices...</div>
         </div>
       ) : invoices.length === 0 ? (
-        <div className="card">
-          <div className="empty-state">
-            <div className="empty-state-icon-wrap">
-              <CheckCircle2 size={26} color="#34d399" />
-            </div>
-            <div className="empty-state-title">No Fee Invoices Found</div>
-            <p className="empty-state-text">
-              All fee invoices are up to date or none have been assigned to {selectedStudent?.fullName || "your child"} yet.
-            </p>
-          </div>
+        <div className="office-card" style={{ padding: "48px 20px", textAlign: "center" }}>
+          <CheckCircle2 size={36} color="#059669" style={{ margin: "0 auto 8px" }} />
+          <div style={{ fontSize: "16px", fontWeight: 700, color: "#0f172a" }}>All Fees Cleared</div>
+          <p style={{ fontSize: "13px", color: "#64748b", margin: "4px 0 0 0" }}>
+            No pending fee invoices found for {selectedStudent?.fullName || "your child"}.
+          </p>
         </div>
       ) : (
-        <div className="card" style={{ padding: "0" }}>
-          <div className="table-responsive">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Invoice Item</th>
-                  <th>Due Date</th>
-                  <th>Amount</th>
-                  <th>Paid</th>
-                  <th>Status</th>
-                  <th>Actions & Receipts</th>
-                </tr>
-              </thead>
-              <tbody>
-                {invoices.map((inv) => {
-                  const paidForThisInv = inv.payments.reduce((s, p) => s + parseFloat(p.amount), 0);
-                  const isPaid = inv.status === "PAID";
-                  const isOverdue = inv.status === "OVERDUE";
-                  const remaining = Math.max(0, parseFloat(inv.amountDue) - paidForThisInv);
+        <div className="office-table-wrapper">
+          <table className="office-table">
+            <thead>
+              <tr>
+                <th>Invoice Particulars</th>
+                <th>Due Date</th>
+                <th style={{ textAlign: "right" }}>Total Fee</th>
+                <th style={{ textAlign: "right" }}>Paid</th>
+                <th>Status</th>
+                <th style={{ textAlign: "right" }}>Actions & Receipts</th>
+              </tr>
+            </thead>
+            <tbody>
+              {invoices.map((inv) => {
+                const paidForThisInv = inv.payments.reduce((s, p) => s + parseFloat(p.amount), 0);
+                const isPaid = inv.status === "PAID";
+                const isOverdue = inv.status === "OVERDUE";
+                const remaining = Math.max(0, parseFloat(inv.amountDue) - paidForThisInv);
 
-                  return (
-                    <tr key={inv.id}>
-                      <td>
-                        <div style={{ fontWeight: 600 }}>{inv.feeStructure.name}</div>
-                        <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
-                          {inv.feeStructure.frequency} • Session {inv.feeStructure.academicYear}
-                        </div>
-                      </td>
-                      <td>{new Date(inv.dueDate).toLocaleDateString("en-IN")}</td>
-                      <td style={{ fontWeight: 600 }}>₹{parseFloat(inv.amountDue).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
-                      <td style={{ color: paidForThisInv > 0 ? "#34d399" : "inherit" }}>
-                        ₹{paidForThisInv.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                      </td>
-                      <td>
-                        <span
-                          className={`badge ${
-                            isPaid
-                              ? "badge-teal"
-                              : isOverdue
-                              ? "badge-rose"
-                              : inv.status === "PARTIALLY_PAID"
-                              ? "badge-amber"
-                              : "badge-blue"
-                          }`}
-                        >
-                          <span className="badge-dot" />
-                          <span>{inv.status.replace("_", " ")}</span>
-                        </span>
-                      </td>
-                      <td>
-                        <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-                          {!isPaid && (
-                            <button
-                              onClick={() => initiatePayment(inv)}
-                              className="btn btn-primary btn-sm"
-                              style={{ fontSize: "0.75rem", padding: "4px 10px" }}
-                            >
-                              <CreditCard size={12} />
-                              <span>Pay ₹{remaining.toLocaleString("en-IN")}</span>
-                            </button>
-                          )}
-                          {inv.payments.map((p) => (
-                            <Link
-                              key={p.id}
-                              href={`/api/receipt?paymentId=${p.id}`}
-                              target="_blank"
-                              className="btn btn-secondary btn-sm"
-                              style={{ fontSize: "0.75rem", padding: "4px 8px" }}
-                              title="Download Receipt"
-                            >
-                              <Download size={12} />
-                              <span>{p.receiptNumber}</span>
-                            </Link>
-                          ))}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                return (
+                  <tr key={inv.id}>
+                    <td>
+                      <div style={{ fontWeight: 600, color: "#0f172a" }}>{inv.feeStructure.name}</div>
+                      <div style={{ fontSize: "12px", color: "#64748b" }}>
+                        {inv.feeStructure.frequency} • Session {inv.feeStructure.academicYear}
+                      </div>
+                    </td>
+                    <td style={{ color: "#475569", fontSize: "13px" }}>
+                      {new Date(inv.dueDate).toLocaleDateString("en-IN")}
+                    </td>
+                    <td style={{ textAlign: "right", fontWeight: 700, color: "#0f172a" }}>
+                      ₹{parseFloat(inv.amountDue).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                    </td>
+                    <td style={{ textAlign: "right", fontWeight: 600, color: paidForThisInv > 0 ? "#059669" : "#64748b" }}>
+                      ₹{paidForThisInv.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                    </td>
+                    <td>
+                      {isPaid ? (
+                        <span className="office-pill office-pill-green">Paid</span>
+                      ) : isOverdue ? (
+                        <span className="office-pill office-pill-red">Overdue</span>
+                      ) : inv.status === "PARTIALLY_PAID" ? (
+                        <span className="office-pill office-pill-amber">Partial</span>
+                      ) : (
+                        <span className="office-pill office-pill-gray">Unpaid</span>
+                      )}
+                    </td>
+                    <td style={{ textAlign: "right" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px", justifyContent: "flex-end", flexWrap: "wrap" }}>
+                        {!isPaid && (
+                          <button
+                            onClick={() => initiatePayment(inv)}
+                            className="office-btn office-btn-primary office-btn-sm"
+                          >
+                            <CreditCard size={13} />
+                            <span>Pay ₹{remaining.toLocaleString("en-IN")}</span>
+                          </button>
+                        )}
+                        {inv.payments.map((p) => (
+                          <Link
+                            key={p.id}
+                            href={`/api/receipt?paymentId=${p.id}`}
+                            target="_blank"
+                            className="office-btn office-btn-secondary office-btn-sm"
+                            title="Download Official Payment Receipt"
+                          >
+                            <Printer size={12} />
+                            <span>{p.receiptNumber}</span>
+                          </Link>
+                        ))}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       )}
 
@@ -404,7 +513,7 @@ function FeesContent() {
           style={{
             position: "fixed",
             inset: 0,
-            backgroundColor: "rgba(0,0,0,0.6)",
+            backgroundColor: "rgba(15, 23, 42, 0.5)",
             backdropFilter: "blur(4px)",
             display: "flex",
             alignItems: "center",
@@ -412,34 +521,43 @@ function FeesContent() {
             zIndex: 1000,
             padding: "16px",
           }}
+          onClick={() => setPayingInvoice(null)}
         >
-          <div className="card" style={{ maxWidth: "460px", width: "100%", padding: "24px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+          <div
+            className="office-card"
+            style={{ maxWidth: "460px", width: "100%", margin: 0 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="office-card-header">
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <ShieldCheck size={20} color="#6366f1" />
-                <h2 style={{ fontSize: "1.2rem", fontWeight: 700, margin: 0 }}>Secure Fee Payment</h2>
+                <ShieldCheck size={20} color="#1e3a8a" />
+                <h3 className="office-card-title">Secure Fee Payment</h3>
               </div>
               <button
                 onClick={() => setPayingInvoice(null)}
-                style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)" }}
+                className="office-btn office-btn-secondary office-btn-sm"
+                style={{ padding: "4px" }}
               >
-                <X size={20} />
+                <X size={16} />
               </button>
             </div>
 
-            <div style={{ background: "var(--bg-surface-elevated, #181c2a)", padding: "14px", borderRadius: "8px", marginBottom: "16px" }}>
-              <div style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>Fee Head</div>
-              <div style={{ fontWeight: 600, fontSize: "1rem" }}>{payingInvoice.feeStructure.name}</div>
-              <div style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginTop: "4px" }}>
+            <div style={{ background: "#f8fafc", padding: "14px", borderRadius: "8px", marginBottom: "16px", border: "1px solid #e2e8f0" }}>
+              <div style={{ fontSize: "12px", color: "#64748b" }}>Fee Particulars</div>
+              <div style={{ fontWeight: 700, fontSize: "15px", color: "#0f172a" }}>
+                {payingInvoice.feeStructure.name}
+              </div>
+              <div style={{ fontSize: "12.5px", color: "#475569", marginTop: "2px" }}>
                 Student: {selectedStudent?.fullName} ({selectedStudent?.admissionNo})
               </div>
             </div>
 
-            <div className="form-group" style={{ marginBottom: "16px" }}>
-              <label className="label">Payment Amount (₹)</label>
+            <div className="office-form-group">
+              <label className="office-form-label">Amount to Pay Now (₹)</label>
               <input
                 type="number"
-                className="input"
+                className="office-input"
+                style={{ width: "100%", fontWeight: 700, fontSize: "16px" }}
                 value={payAmount}
                 onChange={(e) => setPayAmount(Math.max(1, parseFloat(e.target.value) || 0))}
                 min={1}
@@ -447,30 +565,32 @@ function FeesContent() {
               />
             </div>
 
-            <div style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginBottom: "20px" }}>
-              🔒 256-bit Encrypted Transaction powered by Razorpay. Supports UPI, NetBanking, Debit/Credit Cards.
+            <div style={{ fontSize: "12px", color: "#64748b", margin: "14px 0 20px 0", lineHeight: 1.5 }}>
+              🔒 256-bit Encrypted Transaction powered by Razorpay. Supports UPI, NetBanking, and Debit/Credit Cards.
             </div>
 
             <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
               <button
-                className="btn btn-secondary"
+                className="office-btn office-btn-secondary"
                 onClick={() => setPayingInvoice(null)}
                 disabled={isProcessing}
               >
                 Cancel
               </button>
               <button
-                className="btn btn-primary"
+                className="office-btn office-btn-primary"
                 onClick={handleProcessPayment}
                 disabled={isProcessing || payAmount <= 0}
               >
                 {isProcessing ? (
                   <>
-                    <Sparkles size={14} className="animate-spin" /> Processing...
+                    <Sparkles size={14} className="animate-spin" />
+                    <span>Processing...</span>
                   </>
                 ) : (
                   <>
-                    <CreditCard size={14} /> Pay ₹{payAmount.toLocaleString("en-IN")}
+                    <CreditCard size={14} />
+                    <span>Pay ₹{payAmount.toLocaleString("en-IN")}</span>
                   </>
                 )}
               </button>
@@ -484,7 +604,14 @@ function FeesContent() {
 
 export default function ParentFeesPage() {
   return (
-    <Suspense fallback={<div className="loading"><Sparkles size={18} className="animate-spin" /> Loading fees...</div>}>
+    <Suspense
+      fallback={
+        <div className="office-page-container" style={{ padding: "60px 20px", textAlign: "center" }}>
+          <Sparkles size={20} className="animate-spin" color="#1e3a8a" style={{ margin: "0 auto 8px" }} />
+          <div style={{ color: "#64748b", fontSize: "14px" }}>Loading fees...</div>
+        </div>
+      }
+    >
       <FeesContent />
     </Suspense>
   );
