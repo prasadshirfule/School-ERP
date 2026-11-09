@@ -65,23 +65,31 @@ export default function GlobalSearch() {
   }, [isOpen]);
 
   useEffect(() => {
-    if (!query.trim() || query.length < 2) {
-      setResults({ students: [], teachers: [], classes: [], invoices: [] });
-      return;
-    }
-
+    let ignore = false;
     const timer = setTimeout(() => {
+      if (!query.trim() || query.length < 2) {
+        if (!ignore) setResults({ students: [], teachers: [], classes: [], invoices: [] });
+        return;
+      }
+
       setLoading(true);
       fetch(`/api/search?q=${encodeURIComponent(query)}`)
         .then((r) => r.json())
         .then((data) => {
-          setResults(data);
-          setLoading(false);
+          if (!ignore) {
+            setResults(data);
+            setLoading(false);
+          }
         })
-        .catch(() => setLoading(false));
+        .catch(() => {
+          if (!ignore) setLoading(false);
+        });
     }, 250);
 
-    return () => clearTimeout(timer);
+    return () => {
+      ignore = true;
+      clearTimeout(timer);
+    };
   }, [query]);
 
   const handleSelect = (href: string) => {

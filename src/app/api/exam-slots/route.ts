@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { getTenantDb, unauthorized, badRequest, forbidden, hasRole } from "@/lib/utils";
 import { getOrCreateExamSlots } from "@/lib/exam-slots";
 
@@ -66,13 +67,14 @@ export async function POST(request: Request) {
   // Create slot tenant-scoped
   const newSlot = await ctx.db.examSlot.create({
     data: {
+      schoolId: ctx.session.user.schoolId,
       academicYear,
       term,
       code: cleanCode,
       name: displayName,
       maxScore: 30, // sensible default
       order,
-    } as any,
+    },
   });
 
   return NextResponse.json(newSlot, { status: 201 });
@@ -102,7 +104,7 @@ export async function PATCH(request: Request) {
 
   const displayName = rawName || current.name;
 
-  const updateData: any = {
+  const updateData: Prisma.ExamSlotUpdateInput = {
     name: displayName,
   };
   if (term) {

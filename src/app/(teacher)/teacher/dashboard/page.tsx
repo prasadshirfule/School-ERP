@@ -2,13 +2,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { tenantClient } from "@/lib/tenant";
 import { Prisma, Notice } from "@prisma/client";
-
-type TeacherDashboardSection = Prisma.SectionGetPayload<{
-  include: { class: true };
-}>;
 import {
   CheckCircle2,
-  ArrowRight,
   Award,
   BookOpen,
   ClipboardList,
@@ -16,9 +11,16 @@ import {
   Calendar,
   School,
   Megaphone,
+  ArrowRight,
+  UserCheck,
 } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { formatDate } from "@/lib/utils";
+
+type TeacherDashboardSection = Prisma.SectionGetPayload<{
+  include: { class: true };
+}>;
 
 export default async function TeacherDashboard() {
   const session = await getServerSession(authOptions);
@@ -49,98 +51,242 @@ export default async function TeacherDashboard() {
     }),
   ]);
 
-  const teacherName = teacherProfile?.fullName || "Faculty Member";
+  const teacherName = teacherProfile?.fullName || session.user.name || "Faculty Member";
   const departmentName = teacherProfile?.department?.name || "Academics";
 
-  return (
-    <div>
-      {/* Breadcrumb Navigation */}
-      <div className="breadcrumbs">
-        <span>Workspace</span>
-        <span className="breadcrumb-separator">/</span>
-        <span className="breadcrumb-current">Faculty Hub</span>
-      </div>
+  const currentHour = new Date().getHours();
+  let greeting = "Good Morning";
+  if (currentHour >= 12 && currentHour < 17) {
+    greeting = "Good Afternoon";
+  } else if (currentHour >= 17) {
+    greeting = "Good Evening";
+  }
 
-      {/* Page Header */}
-      <div className="page-header">
+  return (
+    <div className="office-page-container">
+      {/* ─── Office Welcome Hero ─── */}
+      <div className="welcome-hero-simple">
         <div>
-          <h1 className="page-title">Welcome, {teacherName}</h1>
-          <p className="page-subtitle">
-            {departmentName} • Manage daily class register, assessment marks, timetable, and assignments.
+          <h1 className="welcome-hero-title">
+            {greeting}, {teacherName}!
+          </h1>
+          <p className="welcome-hero-sub">
+            {departmentName} Department • Daily classroom attendance, exam marks entry, and student assignments
           </p>
         </div>
-        <div style={{ display: "flex", gap: "10px" }}>
-          <Link href="/teacher/attendance" className="btn btn-primary">
-            <CheckCircle2 size={15} />
-            <span>Mark Attendance</span>
-          </Link>
-          <Link href="/teacher/marks" className="btn btn-secondary">
-            <Award size={15} />
-            <span>Enter Exam Marks</span>
-          </Link>
+        <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", background: "#ffffff", padding: "6px 14px", borderRadius: "9999px", border: "1px solid #bfdbfe", fontSize: "12.5px", color: "#1e3a8a", fontWeight: 600 }}>
+          <Calendar size={13} />
+          <span>Academic Session 2026-27</span>
         </div>
       </div>
 
-      {/* Operational Stat Cards */}
-      <div className="stats-grid">
-        <Link href="/teacher/attendance" style={{ textDecoration: "none" }}>
-          <div className="stat-card">
-            <div className="stat-icon-wrap stat-icon-teal">
-              <CheckCircle2 size={22} />
-            </div>
-            <div className="stat-info">
-              <span className="stat-label">Daily Register</span>
-              <span className="stat-value" style={{ fontSize: "18px", color: "var(--role-teacher)" }}>
-                Attendance
-              </span>
+      {/* ─── 3 Prominent Primary Action Cards ─── */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+          gap: "16px",
+          marginBottom: "28px",
+        }}
+      >
+        <Link
+          href="/teacher/attendance"
+          style={{
+            background: "#ffffff",
+            border: "2px solid #a7f3d0",
+            borderRadius: "12px",
+            padding: "20px",
+            display: "flex",
+            alignItems: "center",
+            gap: "16px",
+            textDecoration: "none",
+            boxShadow: "0 2px 4px rgba(5,150,105,0.06)",
+            transition: "all 0.15s ease",
+          }}
+        >
+          <div
+            style={{
+              width: "52px",
+              height: "52px",
+              borderRadius: "10px",
+              background: "#059669",
+              color: "#ffffff",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            <CheckCircle2 size={26} />
+          </div>
+          <div>
+            <div style={{ fontSize: "16px", fontWeight: 700, color: "#0f172a" }}>Take Daily Attendance</div>
+            <div style={{ fontSize: "12.5px", color: "#64748b", marginTop: "2px" }}>
+              Select class, mark present/absent with 1 click, submit register
             </div>
           </div>
         </Link>
 
-        <Link href="/teacher/marks" style={{ textDecoration: "none" }}>
-          <div className="stat-card">
-            <div className="stat-icon-wrap stat-icon-indigo">
-              <Award size={22} />
-            </div>
-            <div className="stat-info">
-              <span className="stat-label">Assessments</span>
-              <span className="stat-value" style={{ fontSize: "18px", color: "var(--primary)" }}>
-                Marks Entry
-              </span>
+        <Link
+          href="/teacher/marks"
+          style={{
+            background: "#ffffff",
+            border: "2px solid #bfdbfe",
+            borderRadius: "12px",
+            padding: "20px",
+            display: "flex",
+            alignItems: "center",
+            gap: "16px",
+            textDecoration: "none",
+            boxShadow: "0 2px 4px rgba(30,58,138,0.06)",
+            transition: "all 0.15s ease",
+          }}
+        >
+          <div
+            style={{
+              width: "52px",
+              height: "52px",
+              borderRadius: "10px",
+              background: "#1e3a8a",
+              color: "#ffffff",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            <Award size={26} />
+          </div>
+          <div>
+            <div style={{ fontSize: "16px", fontWeight: 700, color: "#0f172a" }}>Enter Exam Marks</div>
+            <div style={{ fontSize: "12.5px", color: "#64748b", marginTop: "2px" }}>
+              Record scores for unit tests, midterms, and term exams
             </div>
           </div>
         </Link>
 
-        <Link href="/teacher/assignments" style={{ textDecoration: "none" }}>
-          <div className="stat-card">
-            <div className="stat-icon-wrap stat-icon-amber">
-              <ClipboardList size={22} />
-            </div>
-            <div className="stat-info">
-              <span className="stat-label">Coursework</span>
-              <span className="stat-value" style={{ fontSize: "18px", color: "var(--warning)" }}>
-                Assignments
-              </span>
-            </div>
+        <Link
+          href="/teacher/assignments"
+          style={{
+            background: "#ffffff",
+            border: "1px solid #e2e8f0",
+            borderRadius: "12px",
+            padding: "20px",
+            display: "flex",
+            alignItems: "center",
+            gap: "16px",
+            textDecoration: "none",
+            boxShadow: "0 1px 3px rgba(15,23,42,0.04)",
+            transition: "all 0.15s ease",
+          }}
+        >
+          <div
+            style={{
+              width: "52px",
+              height: "52px",
+              borderRadius: "10px",
+              background: "#eff6ff",
+              color: "#1e3a8a",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            <ClipboardList size={26} />
           </div>
-        </Link>
-
-        <Link href="/teacher/timetable" style={{ textDecoration: "none" }}>
-          <div className="stat-card">
-            <div className="stat-icon-wrap stat-icon-coral">
-              <CalendarClock size={22} />
-            </div>
-            <div className="stat-info">
-              <span className="stat-label">Weekly Schedule</span>
-              <span className="stat-value" style={{ fontSize: "18px", color: "var(--role-parent)" }}>
-                Timetable
-              </span>
+          <div>
+            <div style={{ fontSize: "16px", fontWeight: 700, color: "#0f172a" }}>Post Homework & Notes</div>
+            <div style={{ fontSize: "12.5px", color: "#64748b", marginTop: "2px" }}>
+              Create homework assignments and study materials for students
             </div>
           </div>
         </Link>
       </div>
 
-      {/* Two Column Layout: Active Class Sections & Teacher Announcements */}
+      {/* ─── 4 Essential Shortcuts Strip ─── */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+          gap: "12px",
+          marginBottom: "28px",
+        }}
+      >
+        <Link
+          href="/teacher/timetable"
+          style={{
+            background: "#ffffff",
+            border: "1px solid #e2e8f0",
+            borderRadius: "8px",
+            padding: "12px 16px",
+            display: "flex",
+            alignItems: "center",
+            gap: "12px",
+            textDecoration: "none",
+            color: "#334155",
+          }}
+        >
+          <CalendarClock size={18} color="#1e3a8a" />
+          <span style={{ fontSize: "13.5px", fontWeight: 600 }}>My Timetable</span>
+        </Link>
+
+        <Link
+          href="/teacher/syllabus"
+          style={{
+            background: "#ffffff",
+            border: "1px solid #e2e8f0",
+            borderRadius: "8px",
+            padding: "12px 16px",
+            display: "flex",
+            alignItems: "center",
+            gap: "12px",
+            textDecoration: "none",
+            color: "#334155",
+          }}
+        >
+          <BookOpen size={18} color="#059669" />
+          <span style={{ fontSize: "13.5px", fontWeight: 600 }}>Syllabus Tracker</span>
+        </Link>
+
+        <Link
+          href="/teacher/leave"
+          style={{
+            background: "#ffffff",
+            border: "1px solid #e2e8f0",
+            borderRadius: "8px",
+            padding: "12px 16px",
+            display: "flex",
+            alignItems: "center",
+            gap: "12px",
+            textDecoration: "none",
+            color: "#334155",
+          }}
+        >
+          <Calendar size={18} color="#d97706" />
+          <span style={{ fontSize: "13.5px", fontWeight: 600 }}>Apply for Leave</span>
+        </Link>
+
+        <Link
+          href="/admin/notices"
+          style={{
+            background: "#ffffff",
+            border: "1px solid #e2e8f0",
+            borderRadius: "8px",
+            padding: "12px 16px",
+            display: "flex",
+            alignItems: "center",
+            gap: "12px",
+            textDecoration: "none",
+            color: "#334155",
+          }}
+        >
+          <Megaphone size={18} color="#dc2626" />
+          <span style={{ fontSize: "13.5px", fontWeight: 600 }}>Staff Notices</span>
+        </Link>
+      </div>
+
+      {/* ─── Two-Column: Class Sections & Faculty Notice Board ─── */}
       <div
         style={{
           display: "grid",
@@ -149,100 +295,110 @@ export default async function TeacherDashboard() {
         }}
       >
         {/* Class Sections */}
-        <div className="card">
-          <div className="card-header">
-            <div>
-              <h2 className="card-title">Class Sections</h2>
-              <p className="card-subtitle">Quick launch attendance and class rosters</p>
+        <div className="office-card">
+          <div className="office-card-header">
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <School size={18} color="#1e3a8a" />
+              <h3 className="office-card-title">Classrooms & Sections</h3>
             </div>
             <Link
               href="/teacher/attendance"
-              style={{
-                fontSize: "12.5px",
-                fontWeight: 600,
-                color: "var(--primary)",
-                textDecoration: "none",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "4px",
-              }}
+              className="office-btn office-btn-secondary office-btn-sm"
             >
-              <span>Take Register</span>
+              <span>Take Attendance</span>
               <ArrowRight size={13} />
             </Link>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "10px" }}>
-            {(sections as TeacherDashboardSection[]).map((sec: TeacherDashboardSection) => (
-              <Link
-                key={sec.id}
-                href={`/teacher/attendance?sectionId=${sec.id}`}
-                style={{
-                  textDecoration: "none",
-                  padding: "12px 14px",
-                  borderRadius: "var(--radius-sm)",
-                  background: "var(--bg-muted)",
-                  border: "1px solid var(--border-color)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  transition: "all 0.15s ease",
-                }}
-              >
-                <div>
-                  <div style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-primary)" }}>
-                    {sec.class.name}
+          {sections.length === 0 ? (
+            <div style={{ padding: "24px", textAlign: "center", color: "#64748b" }}>
+              No classroom sections available yet.
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              {(sections as TeacherDashboardSection[]).map((sec: TeacherDashboardSection) => (
+                <div
+                  key={sec.id}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "12px 14px",
+                    background: "#f8fafc",
+                    border: "1px solid #e2e8f0",
+                    borderRadius: "8px",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <div
+                      style={{
+                        width: "32px",
+                        height: "32px",
+                        borderRadius: "6px",
+                        background: "#eff6ff",
+                        color: "#1e3a8a",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontWeight: 700,
+                        fontSize: "13px",
+                      }}
+                    >
+                      {sec.class.name.charAt(0)}
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: 600, color: "#0f172a", fontSize: "13.5px" }}>
+                        {sec.class.name} — Section {sec.name}
+                      </div>
+                      <div style={{ fontSize: "11.5px", color: "#64748b" }}>
+                        Session: {sec.academicYear}
+                      </div>
+                    </div>
                   </div>
-                  <div style={{ fontSize: "11.5px", color: "var(--text-muted)" }}>
-                    Section {sec.name} • {sec.academicYear}
-                  </div>
+                  <Link
+                    href={`/teacher/attendance`}
+                    className="office-btn office-btn-secondary office-btn-sm"
+                  >
+                    Mark
+                  </Link>
                 </div>
-                <School size={16} color="var(--primary)" />
-              </Link>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
 
-        {/* Staff Announcements */}
-        <div className="card">
-          <div className="card-header">
-            <div>
-              <h2 className="card-title">Staff Announcements</h2>
-              <p className="card-subtitle">Important administrative circulars</p>
+        {/* Staff Notice Board */}
+        <div className="office-card">
+          <div className="office-card-header">
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <Megaphone size={18} color="#1e3a8a" />
+              <h3 className="office-card-title">Staff Circulars & Notices</h3>
             </div>
-            <Megaphone size={16} color="var(--primary)" />
           </div>
 
           {notices.length === 0 ? (
-            <div className="empty-state" style={{ padding: "24px" }}>
-              <div className="empty-state-title">No new announcements</div>
-              <p className="empty-state-text">Check back later for school updates and meeting circulars.</p>
+            <div style={{ padding: "24px", textAlign: "center", color: "#64748b" }}>
+              No new staff notices published.
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-              {(notices as Notice[]).map((n: Notice) => (
+              {notices.map((n: Notice) => (
                 <div
                   key={n.id}
                   style={{
-                    padding: "12px 14px",
-                    borderRadius: "var(--radius-sm)",
-                    background: "var(--bg-muted)",
-                    border: "1px solid var(--border-color)",
+                    padding: "14px",
+                    background: "#ffffff",
+                    border: "1px solid #e2e8f0",
+                    borderRadius: "8px",
                   }}
                 >
-                  <div style={{ fontSize: "13.5px", fontWeight: 600, color: "var(--text-primary)" }}>
-                    {n.title}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                    <div style={{ fontWeight: 600, color: "#0f172a", fontSize: "13.5px" }}>{n.title}</div>
+                    <span style={{ fontSize: "11.5px", color: "#64748b" }}>{formatDate(n.createdAt)}</span>
                   </div>
-                  <div
-                    style={{
-                      fontSize: "12px",
-                      color: "var(--text-muted)",
-                      marginTop: "4px",
-                      lineHeight: 1.4,
-                    }}
-                  >
+                  <p style={{ fontSize: "13px", color: "#475569", margin: "6px 0 0 0", lineHeight: 1.5 }}>
                     {n.body}
-                  </div>
+                  </p>
                 </div>
               ))}
             </div>

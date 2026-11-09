@@ -53,21 +53,19 @@ export async function POST(request: Request) {
     return badRequest("One or more selected students do not belong to this school");
   }
 
-  const db = ctx.db;
-  const result = await (db as any).$transaction(async (tx: any) => {
-    if (action === "GRADUATE") {
-      const updated = await tx.student.updateMany({
-        where: {
-          id: { in: studentIds },
-        },
-        data: {
-          isActive: false,
-        },
-      });
-      return { count: updated.count, action: "GRADUATE" };
-    }
-
-    const updated = await tx.student.updateMany({
+  let count = 0;
+  if (action === "GRADUATE") {
+    const updated = await ctx.db.student.updateMany({
+      where: {
+        id: { in: studentIds },
+      },
+      data: {
+        isActive: false,
+      },
+    });
+    count = updated.count;
+  } else {
+    const updated = await ctx.db.student.updateMany({
       where: {
         id: { in: studentIds },
       },
@@ -77,9 +75,10 @@ export async function POST(request: Request) {
         isActive: true,
       },
     });
+    count = updated.count;
+  }
 
-    return { count: updated.count, action };
-  });
+  const result = { count, action };
 
   return NextResponse.json({
     message: `Successfully processed ${result.count} student(s) for ${action}`,

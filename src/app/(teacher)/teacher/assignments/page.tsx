@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { BookOpen, Plus, FileText, Calendar, Upload, Trash2, Edit2, Download, AlertCircle, Sparkles, X, Save, Paperclip } from "lucide-react";
+import { BookOpen, Plus, Calendar, Upload, Trash2, Edit2, Download, AlertCircle, Sparkles, X, Save, Paperclip } from "lucide-react";
 
 type Section = { id: string; name: string; class: { id: string; name: string } };
 type Subject = { id: string; name: string };
@@ -101,8 +101,8 @@ export default function TeacherAssignmentsPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to upload attachment");
       setAttachmentUrl(data.url);
-    } catch (err: any) {
-      setError(err.message || "Failed to upload file");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to upload file");
     } finally {
       setUploadingFile(false);
     }
@@ -118,7 +118,15 @@ export default function TeacherAssignmentsPage() {
     setError("");
 
     try {
-      const payload: any = {
+      const payload: {
+        sectionId: string;
+        subjectId: string;
+        title: string;
+        description: string;
+        dueDate: string | null;
+        attachmentUrl: string | null;
+        id?: string;
+      } = {
         sectionId,
         subjectId,
         title: title.trim(),
@@ -139,8 +147,8 @@ export default function TeacherAssignmentsPage() {
 
       setShowModal(false);
       fetchData();
-    } catch (err: any) {
-      setError(err.message || "Failed to save assignment");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to save assignment");
     } finally {
       setSaving(false);
     }

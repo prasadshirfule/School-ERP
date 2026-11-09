@@ -21,6 +21,7 @@ import {
 import { sanitizeCallbackUrl } from "@/lib/redirect";
 
 const ROLE_DASHBOARDS: Record<string, string> = {
+  SUPER_ADMIN: "/super-admin/dashboard",
   ADMIN: "/admin/dashboard",
   PRINCIPAL: "/admin/dashboard",
   TEACHER: "/teacher/dashboard",
@@ -82,6 +83,8 @@ function LoginForm() {
 
   const [email, setEmail] = useState("admin@dpa.edu.in");
   const [password, setPassword] = useState("password123");
+  const [totpCode, setTotpCode] = useState("");
+  const [mfaRequired, setMfaRequired] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [selectedRole, setSelectedRole] = useState("ADMIN");
   const [error, setError] = useState(initialError);
@@ -90,6 +93,8 @@ function LoginForm() {
   const handleSelectDemo = (account: DemoAccount) => {
     setEmail(account.email);
     setPassword("password123");
+    setTotpCode("");
+    setMfaRequired(false);
     setSelectedRole(account.role);
     setError("");
   };
@@ -104,11 +109,19 @@ function LoginForm() {
         redirect: false,
         email: email.trim().toLowerCase(),
         password,
+        totpCode: totpCode.trim(),
       });
 
       if (result?.error) {
-        if (result.error.includes("RATE_LIMITED")) {
+        if (result.error.includes("MFA_REQUIRED")) {
+          setMfaRequired(true);
+          setError("");
+        } else if (result.error.includes("INVALID_MFA_CODE")) {
+          setError("Invalid 6-digit authenticator code or recovery code. Please try again.");
+        } else if (result.error.includes("RATE_LIMITED")) {
           setError("Too many login attempts. Please wait 5 minutes before trying again.");
+        } else if (result.error.includes("SCHOOL_SUSPENDED")) {
+          setError("Your school access has been suspended. Please contact platform administration.");
         } else if (result.error === "Configuration") {
           setError("Server authentication configuration error. Please verify server deployment environment variables.");
         } else {
@@ -321,6 +334,57 @@ function LoginForm() {
           </div>
         </div>
 
+        {mfaRequired && (
+          <div className="form-group" style={{ animation: "fadeIn 0.2s ease" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+              <label className="form-label" htmlFor="mfa-input" style={{ marginBottom: 0, color: "#1e3a8a", fontWeight: 600 }}>
+                2-Step Authenticator Code
+              </label>
+              <button
+                type="button"
+                onClick={() => { setMfaRequired(false); setTotpCode(""); setError(""); }}
+                style={{ background: "none", border: "none", color: "#64748b", fontSize: "11px", cursor: "pointer", textDecoration: "underline" }}
+              >
+                Back to password
+              </button>
+            </div>
+            <div style={{ position: "relative" }}>
+              <ShieldCheck
+                size={16}
+                style={{
+                  position: "absolute",
+                  left: "12px",
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  color: "#2563eb",
+                }}
+              />
+              <input
+                id="mfa-input"
+                type="text"
+                className="form-input"
+                style={{
+                  paddingLeft: "36px",
+                  width: "100%",
+                  borderColor: "#3b82f6",
+                  letterSpacing: "2px",
+                  fontWeight: 600,
+                  fontSize: "15px",
+                }}
+                placeholder="6-digit code or recovery code"
+                value={totpCode}
+                onChange={(e) => setTotpCode(e.target.value)}
+                maxLength={14}
+                autoFocus
+                required
+              />
+            </div>
+            <span style={{ fontSize: "11px", color: "#64748b", marginTop: "4px", display: "block" }}>
+              Enter the code from Google Authenticator, 1Password, or an 8-character recovery code.
+            </span>
+          </div>
+        )}
+
         <button
           type="submit"
           className="btn btn-primary"
@@ -334,6 +398,11 @@ function LoginForm() {
         >
           {loading ? (
             "Authenticating..."
+          ) : mfaRequired ? (
+            <>
+              <span>Verify & Sign In</span>
+              <ShieldCheck size={16} />
+            </>
           ) : (
             <>
               <span>Sign In to Workspace</span>
@@ -345,15 +414,39 @@ function LoginForm() {
 
       <div
         style={{
-          marginTop: "24px",
+          marginTop: "20px",
           paddingTop: "16px",
           borderTop: "1px solid var(--border-color)",
-          textAlign: "center",
           display: "flex",
           flexDirection: "column",
-          gap: "8px",
+          gap: "10px",
+          fontSize: "13px",
+          textAlign: "center",
         }}
       >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <a
+            href="/parent-signup"
+            style={{
+              color: "var(--brand-primary)",
+              textDecoration: "none",
+              fontWeight: 500,
+            }}
+          >
+            Parent Account Sign Up →
+          </a>
+          <a
+            href="/request-access"
+            style={{
+              color: "var(--brand-primary)",
+              textDecoration: "none",
+              fontWeight: 500,
+            }}
+          >
+            Register School →
+          </a>
+        </div>
+
         <div
           style={{
             display: "inline-flex",
@@ -362,10 +455,11 @@ function LoginForm() {
             gap: "6px",
             fontSize: "11.5px",
             color: "var(--text-muted)",
+            marginTop: "6px",
           }}
         >
           <CheckCircle2 size={13} color="var(--success)" />
-          <span>Multi-Tenant Scoped • AES-256 PII Encrypted</span>
+          <span>Public App Gateway • Multi-Tenant Isolated • Platform Protected</span>
         </div>
       </div>
     </div>

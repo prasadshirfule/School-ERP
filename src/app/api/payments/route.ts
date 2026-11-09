@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import prisma from "@/lib/prisma";
 import { getTenantDb, unauthorized, badRequest, forbidden, hasRole } from "@/lib/utils";
 import { Prisma } from "@prisma/client";
 import { calculateInvoiceStatus } from "@/lib/invoiceStatus";
@@ -13,15 +14,15 @@ export async function GET(request: Request) {
   const invoiceId = searchParams.get("invoiceId");
   const studentId = searchParams.get("studentId");
 
-  const where: any = {};
+  const where: Prisma.PaymentWhereInput = {};
   if (invoiceId) where.invoiceId = invoiceId;
 
   if (role === "PARENT") {
-    const parent = await ctx.db.parent.findUnique({
+    const parent = await ctx.db.parent.findFirst({
       where: { userId: ctx.session.user.id },
       include: { students: { select: { studentId: true } } },
     });
-    const childIds = parent?.students.map((c: any) => c.studentId) || [];
+    const childIds = parent?.students.map((c) => c.studentId) || [];
 
     if (studentId) {
       if (!childIds.includes(studentId)) {
@@ -75,11 +76,13 @@ export async function POST(request: Request) {
       return badRequest("Payment amount must be greater than zero");
     }
 
-    const db = ctx.db;
-    const result = await (db as any).$transaction(async (tx: any) => {
+    const schoolId = ctx.session.user.schoolId;
+    if (!schoolId) return badRequest("School ID missing from session");
+
+    const result = await prisma.$transaction(async (tx) => {
       // 1. Fetch invoice inside transaction to avoid race conditions
       const invoice = await tx.feeInvoice.findFirst({
-        where: { id: invoiceId },
+        where: { id: invoiceId, schoolId },
         include: { payments: true },
       });
 
@@ -112,6 +115,7 @@ export async function POST(request: Request) {
 
       const existingPayments = await tx.payment.findMany({
         where: {
+          invoice: { schoolId },
           receiptNumber: { startsWith: recPrefix },
         },
         select: { receiptNumber: true },
@@ -130,6 +134,7 @@ export async function POST(request: Request) {
 
       const payment = await tx.payment.create({
         data: {
+          schoolId,
           invoiceId,
           amount: paymentAmount,
           method,
@@ -155,14 +160,15 @@ export async function POST(request: Request) {
       },
       { status: 201 }
     );
-  } catch (err: any) {
-    if (err.message === "INVOICE_NOT_FOUND") {
+  } catch (err: unknown) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    if (errMsg === "INVOICE_NOT_FOUND") {
       return badRequest("Invoice not found");
     }
-    if (err.message === "INVOICE_ALREADY_SETTLED") {
+    if (errMsg === "INVOICE_ALREADY_SETTLED") {
       return badRequest("Invoice is already paid or waived");
     }
-    if (err.message === "OVERPAYMENT_EXCEEDS_BALANCE") {
+    if (errMsg === "OVERPAYMENT_EXCEEDS_BALANCE") {
       return badRequest("Payment amount exceeds the outstanding balance on this invoice");
     }
     console.error("Payment processing error:", err);

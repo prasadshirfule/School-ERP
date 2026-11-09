@@ -48,7 +48,6 @@ export default function TeacherSyllabusPage() {
       setTopics([]);
       return;
     }
-    setLoadingTopics(true);
     fetch(`/api/syllabus?classId=${selectedClass}&subjectId=${selectedSubject}&academicYear=${academicYear}`)
       .then((r) => r.json())
       .then((data) => {
@@ -58,7 +57,25 @@ export default function TeacherSyllabusPage() {
   };
 
   useEffect(() => {
-    fetchTopics();
+    if (!selectedClass || !selectedSubject) {
+      return;
+    }
+    let ignore = false;
+    fetch(`/api/syllabus?classId=${selectedClass}&subjectId=${selectedSubject}&academicYear=${academicYear}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (!ignore) {
+          setTopics(Array.isArray(data) ? data : []);
+          setLoadingTopics(false);
+        }
+      })
+      .catch(() => {
+        if (!ignore) setLoadingTopics(false);
+      });
+
+    return () => {
+      ignore = true;
+    };
   }, [selectedClass, selectedSubject, academicYear]);
 
   const handleAddTopic = async () => {

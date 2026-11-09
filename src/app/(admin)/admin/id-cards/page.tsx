@@ -81,25 +81,40 @@ export default function IdCardsPage() {
 
   useEffect(() => {
     if (!selectedClassId) return;
-    setLoading(true);
-    let url = `/api/students?classId=${selectedClassId}`;
-    if (selectedSectionId) {
-      url += `&sectionId=${selectedSectionId}`;
-    }
+    let ignore = false;
 
-    fetch(url)
-      .then((r) => r.json())
-      .then((data) => {
-        if (Array.isArray(data)) {
-          setStudents(data);
-          setSelectedStudentIds(new Set(data.map((s) => s.id)));
-        } else {
+    async function loadStudents() {
+      try {
+        let url = `/api/students?classId=${selectedClassId}`;
+        if (selectedSectionId) {
+          url += `&sectionId=${selectedSectionId}`;
+        }
+
+        const r = await fetch(url);
+        if (!ignore && r.ok) {
+          const data = await r.json();
+          if (Array.isArray(data)) {
+            setStudents(data);
+            setSelectedStudentIds(new Set(data.map((s) => s.id)));
+          } else {
+            setStudents([]);
+            setSelectedStudentIds(new Set());
+          }
+        }
+      } catch {
+        if (!ignore) {
           setStudents([]);
           setSelectedStudentIds(new Set());
         }
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
+      } finally {
+        if (!ignore) setLoading(false);
+      }
+    }
+
+    loadStudents();
+    return () => {
+      ignore = true;
+    };
   }, [selectedClassId, selectedSectionId]);
 
   const toggleSelectAll = () => {

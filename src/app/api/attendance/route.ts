@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { AttendanceStatus } from "@prisma/client";
 import { getTenantDb, unauthorized, badRequest } from "@/lib/utils";
 
 export async function GET(request: Request) {
@@ -63,11 +64,11 @@ export async function POST(request: Request) {
         studentId: rec.studentId,
         sectionId,
         date: dateObj,
-        status: rec.status as any,
+        status: rec.status as AttendanceStatus,
         markedBy: ctx.session.user.id,
-      } as any,
+      },
       update: {
-        status: rec.status as any,
+        status: rec.status as AttendanceStatus,
         markedBy: ctx.session.user.id,
       },
     });

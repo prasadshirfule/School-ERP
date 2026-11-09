@@ -26,9 +26,9 @@ export async function GET() {
     }
 
     const assignedSubjects = teacher.subjects
-      .map((ts: any) => ts.subject)
-      .filter((s: any) => s.schoolId === ctx.session.user.schoolId)
-      .sort((a: any, b: any) => a.name.localeCompare(b.name));
+      .map((ts) => ts.subject)
+      .filter((s) => s.schoolId === ctx.session.user.schoolId)
+      .sort((a, b) => a.name.localeCompare(b.name));
 
     return NextResponse.json(assignedSubjects);
   }
@@ -71,8 +71,9 @@ export async function POST(request: Request) {
   // Create subject tenant-scoped
   const subject = await ctx.db.subject.create({
     data: {
+      schoolId: ctx.session.user.schoolId,
       name,
-    } as any,
+    },
   });
 
   // If created by a teacher, automatically link TeacherSubject so the teacher can immediately use it

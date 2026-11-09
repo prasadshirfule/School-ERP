@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getTenantDb, unauthorized } from "@/lib/utils";
+import prisma from "@/lib/prisma";
 import { razorpayService } from "@/lib/razorpay";
 import { calculateInvoiceStatus } from "@/lib/invoiceStatus";
 import { z } from "zod";
@@ -71,11 +72,11 @@ export async function POST(req: NextRequest) {
 
     // If caller is PARENT, verify they own the child linked to this invoice
     if (ctx.session.user.role === "PARENT") {
-      const parent = await ctx.db.parent.findUnique({
+      const parent = await ctx.db.parent.findFirst({
         where: { userId: ctx.session.user.id },
         include: { students: { select: { studentId: true } } },
       });
-      const childIds = parent?.students.map((c: any) => c.studentId) || [];
+      const childIds = parent?.students.map((c: { studentId: string }) => c.studentId) || [];
       if (!childIds.includes(invoice.studentId)) {
         return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
       }
@@ -85,7 +86,7 @@ export async function POST(req: NextRequest) {
     const receiptNumber = `ONLINE-REC-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
 
     // Execute payment record and invoice update in tenant transaction with atomic balance re-calculation
-    const result = await (ctx.db as any).$transaction(async (tx: any) => {
+    const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // Re-verify idempotency inside transaction
       const existingInTx = await tx.payment.findFirst({
         where: { gatewayRef },
@@ -109,6 +110,7 @@ export async function POST(req: NextRequest) {
 
       const payment = await tx.payment.create({
         data: {
+          schoolId: ctx.session.user.schoolId,
           invoiceId: invoice.id,
           amount: paymentAmount,
           method: "ONLINE",

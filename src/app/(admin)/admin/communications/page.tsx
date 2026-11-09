@@ -1,13 +1,19 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { MessageSquare, Send, Sparkles, Phone, Users, ShieldAlert, CheckCircle2, Copy } from "lucide-react";
+import { MessageSquare, Send, Phone, CheckCircle2, Copy, Sparkles } from "lucide-react";
 import { useToast } from "@/components/ui/Toast";
 
 interface ClassItem {
   id: string;
   name: string;
   sections: Array<{ id: string; name: string }>;
+}
+
+interface BroadcastResult {
+  total: number;
+  successful: number;
+  failed: number;
 }
 
 const TEMPLATES = [
@@ -50,7 +56,7 @@ export default function CommunicationsPage() {
   const [selectedSectionId, setSelectedSectionId] = useState<string>("");
   const [messageTemplate, setMessageTemplate] = useState<string>(TEMPLATES[0].text);
   const [isSending, setIsSending] = useState(false);
-  const [lastResult, setLastResult] = useState<any>(null);
+  const [lastResult, setLastResult] = useState<BroadcastResult | null>(null);
 
   useEffect(() => {
     fetch("/api/classes")
@@ -65,7 +71,7 @@ export default function CommunicationsPage() {
 
   const handleSelectTemplate = (t: (typeof TEMPLATES)[0]) => {
     setMessageTemplate(t.text);
-    setChannel(t.channel as any);
+    setChannel(t.channel as "WHATSAPP" | "SMS");
     setAudience(t.audience);
   };
 
@@ -102,8 +108,8 @@ export default function CommunicationsPage() {
 
       addToast("success", data.message || "Notifications dispatched successfully!");
       setLastResult(data.result);
-    } catch (err: any) {
-      addToast("error", err.message || "Failed to dispatch notifications");
+    } catch (err: unknown) {
+      addToast("error", err instanceof Error ? err.message : "Failed to dispatch notifications");
     } finally {
       setIsSending(false);
     }

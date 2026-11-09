@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>School ERP</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: #0f172a;
+      color: #ffffff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      text-align: center;
+      padding: 24px;
+    }
+    .logo-container {
+      width: 68px;
+      height: 68px;
+      background-color: #1e3a8a;
+      border: 2px solid #3b82f6;
+      border-radius: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 20px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+    }
+    .logo-container svg {
+      width: 38px;
+      height: 38px;
+      fill: #ffffff;
+    }
+    h1 {
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      margin-bottom: 6px;
+    }
+    p.tagline {
+      font-size: 14px;
+      color: #94a3b8;
+      margin-bottom: 28px;
+      max-width: 300px;
+      line-height: 1.4;
+    }
+    .spinner {
+      width: 36px;
+      height: 36px;
+      border: 3px solid rgba(255,255,255,0.15);
+      border-top-color: #3b82f6;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .status-text {
+      font-size: 13px;
+      color: #93c5fd;
+      margin-top: 16px;
+      min-height: 20px;
+    }
+    .config-card {
+      display: none;
+      background-color: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 14px;
+      padding: 20px;
+      width: 100%;
+      max-width: 360px;
+      margin-top: 24px;
+      text-align: left;
+    }
+    .config-card label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: #cbd5e1;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .config-card input {
+      width: 100%;
+      padding: 12px 14px;
+      border-radius: 8px;
+      border: 1px solid #475569;
+      background-color: #0f172a;
+      color: #ffffff;
+      font-size: 14px;
+      margin-bottom: 14px;
+      outline: none;
+    }
+    .config-card input:focus {
+      border-color: #3b82f6;
+    }
+    .btn {
+      width: 100%;
+      padding: 12px;
+      border-radius: 8px;
+      background-color: #2563eb;
+      color: #ffffff;
+      border: none;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn:active {
+      background-color: #1d4ed8;
+    }
+    .btn-secondary {
+      background-color: #334155;
+      margin-top: 8px;
+    }
+    .help-note {
+      font-size: 11px;
+      color: #64748b;
+      margin-top: 12px;
+      line-height: 1.4;
+    }
+  </style>
+</head>
+<body>
+  <div class="logo-container">
+    <svg viewBox="0 0 24 24">
+      <path d="M12 3L1 9L12 15L21 10.09V17H23V9M5 13.18V17.18L12 21L19 17.18V13.18L12 17L5 13.18Z" />
+    </svg>
+  </div>
+  <h1>School ERP</h1>
+  <p class="tagline">Official School Management & Parent Portal</p>
+  
+  <div id="loadingSection">
+    <div class="spinner"></div>
+    <div id="statusText" class="status-text">Connecting to School ERP...</div>
+  </div>
+
+  <div id="configCard" class="config-card">
+    <label for="serverUrlInput">Server Environment</label>
+    <input type="url" id="serverUrlInput" placeholder="https://school-erp-wb73.vercel.app" />
+    <button id="connectBtn" class="btn" onclick="connectServer()">Connect to Server</button>
+    <button class="btn btn-secondary" onclick="resetToProduction()">Reset to Production</button>
+    <div class="help-note">
+      Default connects to the hosted production server via HTTPS. You may optionally enter a local development server for testing.
+    </div>
+  </div>
+
+  <script>
+    const PROD_SERVER = "https://school-erp-wb73.vercel.app";
+    const statusText = document.getElementById("statusText");
+    const loadingSection = document.getElementById("loadingSection");
+    const configCard = document.getElementById("configCard");
+    const serverUrlInput = document.getElementById("serverUrlInput");
+
+    function getServerUrl() {
+      return localStorage.getItem("erp_server_url") || PROD_SERVER;
+    }
+
+    function redirectTo(url) {
+      statusText.innerText = "Connecting to " + url + "...";
+      loadingSection.style.display = "block";
+      configCard.style.display = "none";
+      setTimeout(() => {
+        window.location.replace(url);
+      }, 200);
+    }
+
+    function connectServer() {
+      let url = serverUrlInput.value.trim();
+      if (!url) url = PROD_SERVER;
+      if (!url.startsWith("http://") && !url.startsWith("https://")) {
+        url = "https://" + url;
+      }
+      localStorage.setItem("erp_server_url", url);
+      redirectTo(url);
+    }
+
+    function resetToProduction() {
+      localStorage.removeItem("erp_server_url");
+      redirectTo(PROD_SERVER);
+    }
+
+    // Auto-launch on startup
+    window.addEventListener("DOMContentLoaded", () => {
+      const targetUrl = getServerUrl();
+      redirectTo(targetUrl);
+    });
+  </script>
+</body>
+</html>

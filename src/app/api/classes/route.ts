@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import prisma from "@/lib/prisma";
 import { getTenantDb, unauthorized, badRequest } from "@/lib/utils";
 import { ClassCreateSchema } from "@/lib/validations";
 
@@ -45,26 +46,29 @@ export async function POST(request: Request) {
   }
 
   const schoolId = ctx.session.user.schoolId;
+  if (!schoolId) return badRequest("School ID missing from session");
   const academicYear = "2026-27"; // Default academic year
 
   try {
-    const db = ctx.db;
-    const result = await (db as any).$transaction(async (tx: any) => {
+    const result = await prisma.$transaction(async (tx) => {
       // Auto-compute sort order: highest existing order + 1 (or 1 if none)
       const maxResult = await tx.class.aggregate({
+        where: { schoolId },
         _max: { order: true },
       });
       const nextOrder = (maxResult._max.order ?? 0) + 1;
 
       const cls = await tx.class.create({
         data: {
+          schoolId,
           name: name.trim(),
           order: nextOrder,
         },
       });
 
       // Create all sections
-      const sectionData = sections.map((sec: any) => ({
+      const sectionData = sections.map((sec) => ({
+        schoolId,
         classId: cls.id,
         name: sec.name.trim(),
         academicYear,
@@ -91,8 +95,8 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json(result, { status: 201 });
-  } catch (e: any) {
-    if (e.code === "P2002") {
+  } catch (e: unknown) {
+    if (typeof e === "object" && e && "code" in e && e.code === "P2002") {
       return badRequest("A class with this name already exists in your school");
     }
     throw e;

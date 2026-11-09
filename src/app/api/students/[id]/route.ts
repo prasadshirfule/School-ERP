@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { getTenantDb, unauthorized, badRequest } from "@/lib/utils";
 import { encryptPII, decryptPII, maskAadhaar } from "@/lib/security";
 import { StudentUpdateSchema } from "@/lib/validations";
@@ -120,7 +121,7 @@ export async function PATCH(
   }
 
   const data = parsed.data;
-  const updateData: any = {};
+  const updateData: Prisma.StudentUpdateInput = {};
 
   if (data.fullName !== undefined) updateData.fullName = data.fullName.trim();
   if (data.dob) {

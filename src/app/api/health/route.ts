@@ -10,7 +10,7 @@ export async function GET() {
     const pingStart = Date.now();
     await prisma.$queryRaw`SELECT 1`;
     dbLatency = Date.now() - pingStart;
-  } catch (error: any) {
+  } catch (error: unknown) {
     dbStatus = "unhealthy";
   }
 

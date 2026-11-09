@@ -56,9 +56,10 @@ export async function POST(request: Request) {
 
   const department = await ctx.db.department.create({
     data: {
+      schoolId: ctx.session.user.schoolId,
       name,
       headOfDepartmentId,
-    } as any,
+    },
     include: {
       headOfDepartment: { select: { id: true, fullName: true } },
       teachers: { select: { id: true, fullName: true } },
@@ -87,7 +88,7 @@ export async function PATCH(request: Request) {
   const existing = await ctx.db.department.findUnique({ where: { id } });
   if (!existing) return badRequest("Department not found");
 
-  const updateData: any = {};
+  const updateData: { name?: string; headOfDepartmentId?: string | null } = {};
   if (typeof body.name === "string" && body.name.trim()) {
     updateData.name = body.name.trim();
   }
@@ -110,13 +111,13 @@ export async function PATCH(request: Request) {
     // Unlink teachers currently in this department who are not in the list
     await ctx.db.teacher.updateMany({
       where: { departmentId: id, id: { notIn: body.teacherIds } },
-      data: { departmentId: null } as any,
+      data: { departmentId: null },
     });
     // Link newly assigned teachers
     if (body.teacherIds.length > 0) {
       await ctx.db.teacher.updateMany({
         where: { id: { in: body.teacherIds } },
-        data: { departmentId: id } as any,
+        data: { departmentId: id },
       });
     }
   }
@@ -146,7 +147,7 @@ export async function DELETE(request: Request) {
   // Unlink teachers first
   await ctx.db.teacher.updateMany({
     where: { departmentId: id },
-    data: { departmentId: null } as any,
+    data: { departmentId: null },
   });
 
   await ctx.db.department.delete({ where: { id } });

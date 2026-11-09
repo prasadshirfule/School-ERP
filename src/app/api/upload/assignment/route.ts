@@ -66,7 +66,7 @@ export async function POST(request: Request) {
       filename: file.name || "attachment.pdf",
       folder: "assignments",
       contentType: file.type,
-      schoolId: session.user.schoolId,
+      schoolId: session.user.schoolId || undefined,
     });
 
     return NextResponse.json({
@@ -75,8 +75,9 @@ export async function POST(request: Request) {
       size: file.size,
       mimeType: file.type,
     });
-  } catch (error: any) {
-    return badRequest(error.message || "Failed to process assignment attachment");
+  } catch (error: unknown) {
+    const errorMsg = error instanceof Error ? error.message : "Failed to process assignment attachment";
+    return badRequest(errorMsg);
   }
 }
 

@@ -29,6 +29,7 @@ export const StudentCreateSchema = z.object({
   medicalConditions: z.string().optional().nullable(),
   photoUrl: z.string().optional().nullable(),
   classDesignation: z.string().optional().nullable(),
+  parentEmail: z.string().email("Invalid parent email address").optional().nullable(),
   // Optional admission fee details
   totalFees: z.union([z.number(), z.string()]).optional().nullable(),
   amountPaidNow: z.union([z.number(), z.string()]).optional().nullable(),

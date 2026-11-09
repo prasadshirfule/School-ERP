@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import {
   Users,
   Plus,
@@ -8,12 +8,12 @@ import {
   Phone,
   School,
   CheckCircle2,
-  XCircle,
   AlertCircle,
   Sparkles,
-  Lock,
   UserCheck,
   UserX,
+  Search,
+  X,
 } from "lucide-react";
 
 type TeacherData = {
@@ -34,6 +34,7 @@ export default function TeachersPage() {
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Form fields
   const [fullName, setFullName] = useState("");
@@ -56,7 +57,22 @@ export default function TeachersPage() {
   };
 
   useEffect(() => {
-    fetchTeachers();
+    let ignore = false;
+    fetch("/api/teachers?all=true")
+      .then((r) => r.json())
+      .then((data) => {
+        if (!ignore) {
+          setTeachers(Array.isArray(data) ? data : []);
+          setLoading(false);
+        }
+      })
+      .catch(() => {
+        if (!ignore) setLoading(false);
+      });
+
+    return () => {
+      ignore = true;
+    };
   }, []);
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -102,8 +118,8 @@ export default function TeachersPage() {
       setPassword("");
       setShowForm(false);
       fetchTeachers();
-    } catch (err: any) {
-      setError(err.message || "An unexpected error occurred");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "An unexpected error occurred");
     } finally {
       setSubmitting(false);
     }
@@ -136,17 +152,31 @@ export default function TeachersPage() {
         const data = await res.json();
         setError(data.error || "Failed to update teacher status");
       }
-    } catch (err: any) {
-      setError(err.message || "Failed to update teacher status");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to update teacher status");
     } finally {
       setTogglingId(null);
     }
   };
 
+  const filteredTeachers = useMemo(() => {
+    if (!searchQuery.trim()) return teachers;
+    const q = searchQuery.toLowerCase().trim();
+    return teachers.filter(
+      (t) =>
+        t.fullName.toLowerCase().includes(q) ||
+        t.email.toLowerCase().includes(q) ||
+        (t.phone && t.phone.includes(q))
+    );
+  }, [teachers, searchQuery]);
+
   if (loading) {
     return (
-      <div className="loading">
-        <Sparkles size={18} className="animate-spin" /> Loading teachers faculty...
+      <div className="office-page-container" style={{ display: "flex", justifyContent: "center", padding: "80px 0" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", color: "#64748b", fontSize: "15px" }}>
+          <Sparkles size={20} className="animate-spin" color="#1e3a8a" />
+          <span>Loading teachers faculty directory...</span>
+        </div>
       </div>
     );
   }
@@ -155,97 +185,134 @@ export default function TeachersPage() {
   const assignedCount = teachers.filter((t) => t.sections.length > 0).length;
 
   return (
-    <div>
-      <div className="page-header">
+    <div className="office-page-container">
+      {/* ─── Header ─── */}
+      <div className="office-header">
         <div>
-          <h1 className="page-title">Teachers Directory</h1>
-          <p className="page-subtitle">
-            Manage teaching faculty profiles, class teacher allocations, and portal login credentials
+          <h1 className="office-title">Teachers Directory</h1>
+          <p className="office-subtitle">
+            Manage teaching faculty profiles, class teacher allocations, and portal credentials
           </p>
         </div>
-        <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>
-          <Plus size={16} />
-          <span>{showForm ? "Close Form" : "Add Teacher"}</span>
-        </button>
+        <div className="office-actions-bar">
+          <button
+            className="office-btn office-btn-primary"
+            onClick={() => setShowForm(!showForm)}
+          >
+            {showForm ? <X size={16} /> : <Plus size={16} />}
+            <span>{showForm ? "Cancel Form" : "Add Teacher"}</span>
+          </button>
+        </div>
       </div>
 
       {error && (
-        <div className="alert alert-error" style={{ marginBottom: "20px" }}>
+        <div
+          style={{
+            background: "#fef2f2",
+            border: "1px solid #fecaca",
+            color: "#991b1b",
+            borderRadius: "8px",
+            padding: "12px 16px",
+            marginBottom: "20px",
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            fontSize: "13.5px",
+          }}
+        >
           <AlertCircle size={18} />
           <span>{error}</span>
         </div>
       )}
 
       {success && (
-        <div className="alert alert-success" style={{ marginBottom: "20px" }}>
+        <div
+          style={{
+            background: "#ecfdf5",
+            border: "1px solid #a7f3d0",
+            color: "#065f46",
+            borderRadius: "8px",
+            padding: "12px 16px",
+            marginBottom: "20px",
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            fontSize: "13.5px",
+          }}
+        >
           <CheckCircle2 size={18} />
           <span>{success}</span>
         </div>
       )}
 
-      {/* Quick Add Form */}
+      {/* ─── Add Teacher Form ─── */}
       {showForm && (
-        <div className="card" style={{ marginBottom: "24px" }}>
-          <div className="card-header">
-            <h3 className="card-title">Add New Faculty Member</h3>
+        <div className="office-card" style={{ border: "2px solid #bfdbfe", background: "#f8fafc" }}>
+          <div className="office-card-header">
+            <h3 className="office-card-title">Register New Faculty Member</h3>
           </div>
           <form onSubmit={handleCreate}>
-            <div className="form-row">
-              <div className="form-group">
-                <label className="form-label">
-                  Full Name <span style={{ color: "var(--danger)" }}>*</span>
+            <div className="office-form-grid-2">
+              <div className="office-form-group">
+                <label className="office-form-label">
+                  Full Name <span style={{ color: "#dc2626" }}>*</span>
                 </label>
                 <input
-                  className="form-input"
+                  type="text"
                   placeholder="e.g. Vikramaditya Singh"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
+                  className="office-input"
+                  style={{ width: "100%" }}
                   required
                 />
               </div>
-              <div className="form-group">
-                <label className="form-label">
-                  Email Address (Login Username) <span style={{ color: "var(--danger)" }}>*</span>
+              <div className="office-form-group">
+                <label className="office-form-label">
+                  Email Address (Login Username) <span style={{ color: "#dc2626" }}>*</span>
                 </label>
                 <input
-                  className="form-input"
                   type="email"
                   placeholder="e.g. teacher@school.edu"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  className="office-input"
+                  style={{ width: "100%" }}
                   required
                 />
               </div>
             </div>
 
-            <div className="form-row">
-              <div className="form-group">
-                <label className="form-label">Phone Number (Optional)</label>
+            <div className="office-form-grid-2">
+              <div className="office-form-group">
+                <label className="office-form-label">Phone Number (Optional)</label>
                 <input
-                  className="form-input"
                   type="tel"
                   placeholder="10-digit mobile number"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
+                  className="office-input"
+                  style={{ width: "100%" }}
                 />
               </div>
-              <div className="form-group">
-                <label className="form-label">
-                  Initial Password <span style={{ color: "var(--danger)" }}>*</span>
+              <div className="office-form-group">
+                <label className="office-form-label">
+                  Initial Password <span style={{ color: "#dc2626" }}>*</span>
                 </label>
                 <input
-                  className="form-input"
                   type="password"
                   placeholder="Minimum 6 characters"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  className="office-input"
+                  style={{ width: "100%" }}
                   required
                 />
               </div>
             </div>
 
-            <div style={{ display: "flex", gap: "10px", marginTop: "8px" }}>
-              <button className="btn btn-primary" type="submit" disabled={submitting}>
+            <div style={{ display: "flex", gap: "10px", marginTop: "10px" }}>
+              <button className="office-btn office-btn-primary" type="submit" disabled={submitting}>
                 {submitting ? (
                   <>
                     <Sparkles size={16} className="animate-spin" />
@@ -254,11 +321,15 @@ export default function TeachersPage() {
                 ) : (
                   <>
                     <CheckCircle2 size={16} />
-                    <span>Create Teacher Account</span>
+                    <span>Create Faculty Account</span>
                   </>
                 )}
               </button>
-              <button className="btn btn-secondary" type="button" onClick={() => setShowForm(false)}>
+              <button
+                className="office-btn office-btn-secondary"
+                type="button"
+                onClick={() => setShowForm(false)}
+              >
                 Cancel
               </button>
             </div>
@@ -266,68 +337,183 @@ export default function TeachersPage() {
         </div>
       )}
 
-      {/* Stats Summary */}
-      <div className="stats-grid">
-        <div className="stat-card">
-          <div className="stat-icon-wrap stat-icon-teal">
+      {/* ─── Metric Highlights ─── */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+          gap: "14px",
+          marginBottom: "24px",
+        }}
+      >
+        <div
+          style={{
+            background: "#ffffff",
+            border: "1px solid #e2e8f0",
+            borderRadius: "10px",
+            padding: "16px",
+            display: "flex",
+            alignItems: "center",
+            gap: "14px",
+          }}
+        >
+          <div
+            style={{
+              width: "44px",
+              height: "44px",
+              borderRadius: "8px",
+              background: "#eff6ff",
+              color: "#1e3a8a",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
             <Users size={22} />
           </div>
-          <div className="stat-info">
-            <span className="stat-label">Total Faculty</span>
-            <span className="stat-value">{teachers.length}</span>
+          <div>
+            <div style={{ fontSize: "12px", color: "#64748b", fontWeight: 600 }}>Total Faculty</div>
+            <div style={{ fontSize: "20px", fontWeight: 700, color: "#0f172a" }}>{teachers.length}</div>
           </div>
         </div>
 
-        <div className="stat-card">
-          <div className="stat-icon-wrap stat-icon-emerald">
+        <div
+          style={{
+            background: "#ffffff",
+            border: "1px solid #e2e8f0",
+            borderRadius: "10px",
+            padding: "16px",
+            display: "flex",
+            alignItems: "center",
+            gap: "14px",
+          }}
+        >
+          <div
+            style={{
+              width: "44px",
+              height: "44px",
+              borderRadius: "8px",
+              background: "#ecfdf5",
+              color: "#059669",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
             <UserCheck size={22} />
           </div>
-          <div className="stat-info">
-            <span className="stat-label">Active Teachers</span>
-            <span className="stat-value" style={{ color: "#34d399" }}>
-              {activeCount}
-            </span>
+          <div>
+            <div style={{ fontSize: "12px", color: "#64748b", fontWeight: 600 }}>Active Teachers</div>
+            <div style={{ fontSize: "20px", fontWeight: 700, color: "#059669" }}>{activeCount}</div>
           </div>
         </div>
 
-        <div className="stat-card">
-          <div className="stat-icon-wrap stat-icon-indigo">
+        <div
+          style={{
+            background: "#ffffff",
+            border: "1px solid #e2e8f0",
+            borderRadius: "10px",
+            padding: "16px",
+            display: "flex",
+            alignItems: "center",
+            gap: "14px",
+          }}
+        >
+          <div
+            style={{
+              width: "44px",
+              height: "44px",
+              borderRadius: "8px",
+              background: "#f8fafc",
+              color: "#475569",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
             <School size={22} />
           </div>
-          <div className="stat-info">
-            <span className="stat-label">Class Teachers Assigned</span>
-            <span className="stat-value">{assignedCount}</span>
+          <div>
+            <div style={{ fontSize: "12px", color: "#64748b", fontWeight: 600 }}>Class Teachers Assigned</div>
+            <div style={{ fontSize: "20px", fontWeight: 700, color: "#0f172a" }}>{assignedCount}</div>
           </div>
         </div>
       </div>
 
-      {/* Teachers Roster Table */}
-      <div className="table-container">
-        <table>
+      {/* ─── Search Bar ─── */}
+      <div
+        style={{
+          background: "#ffffff",
+          border: "1px solid #e2e8f0",
+          borderRadius: "10px",
+          padding: "14px 18px",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: "14px",
+          marginBottom: "20px",
+        }}
+      >
+        <div className="office-search-wrapper" style={{ flex: 1, minWidth: "240px", maxWidth: "380px" }}>
+          <Search size={16} className="office-search-icon" />
+          <input
+            type="text"
+            placeholder="Search teacher by name, email, or phone..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="office-input office-search-input"
+            style={{ width: "100%" }}
+          />
+        </div>
+
+        <div style={{ fontSize: "13px", color: "#64748b" }}>
+          Showing <strong>{filteredTeachers.length}</strong> of {teachers.length} teachers
+        </div>
+      </div>
+
+      {/* ─── Teachers Table ─── */}
+      <div className="office-table-wrapper">
+        <table className="office-table">
           <thead>
             <tr>
               <th>Teacher Name</th>
               <th>Email & Contact</th>
-              <th>Assigned Class & Sections</th>
+              <th>Assigned Class Sections</th>
               <th>Status</th>
               <th style={{ textAlign: "right" }}>Actions</th>
             </tr>
           </thead>
           <tbody>
-            {teachers.length === 0 ? (
+            {filteredTeachers.length === 0 ? (
               <tr>
-                <td colSpan={5}>
-                  <div className="empty-state">
-                    <div className="empty-state-icon-wrap">
-                      <Users size={26} color="#2dd4bf" />
+                <td colSpan={5} style={{ padding: "48px 20px", textAlign: "center" }}>
+                  <div style={{ maxWidth: "360px", margin: "0 auto" }}>
+                    <div
+                      style={{
+                        width: "48px",
+                        height: "48px",
+                        borderRadius: "50%",
+                        background: "#eff6ff",
+                        color: "#1e3a8a",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        margin: "0 auto 12px",
+                      }}
+                    >
+                      <Users size={24} />
                     </div>
-                    <div className="empty-state-title">No teachers registered yet</div>
-                    <p className="empty-state-text">
-                      Add teaching staff to assign class teachers and enable attendance marking.
+                    <div style={{ fontSize: "16px", fontWeight: 700, color: "#0f172a", marginBottom: "6px" }}>
+                      {searchQuery ? "No matching teachers found" : "No teachers registered yet"}
+                    </div>
+                    <p style={{ fontSize: "13px", color: "#64748b", margin: "0 0 16px 0" }}>
+                      {searchQuery
+                        ? `No teacher matches "${searchQuery}". Please check the spelling.`
+                        : "Register teachers to assign classroom periods and manage attendance."}
                     </p>
                     <button
-                      className="btn btn-primary btn-sm"
-                      style={{ marginTop: "10px" }}
+                      className="office-btn office-btn-primary office-btn-sm"
                       onClick={() => setShowForm(true)}
                     >
                       <Plus size={14} />
@@ -337,7 +523,7 @@ export default function TeachersPage() {
                 </td>
               </tr>
             ) : (
-              teachers.map((t) => {
+              filteredTeachers.map((t) => {
                 const isToggling = togglingId === t.id;
                 return (
                   <tr key={t.id}>
@@ -345,25 +531,24 @@ export default function TeachersPage() {
                       <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                         <div
                           style={{
-                            width: "34px",
-                            height: "34px",
-                            borderRadius: "10px",
-                            background: "var(--role-teacher-light)",
-                            color: "#2dd4bf",
+                            width: "36px",
+                            height: "36px",
+                            borderRadius: "50%",
+                            background: "#eff6ff",
+                            color: "#1e3a8a",
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
                             fontWeight: 700,
-                            fontSize: "14px",
+                            fontSize: "13.5px",
+                            flexShrink: 0,
                           }}
                         >
                           {t.fullName.charAt(0).toUpperCase()}
                         </div>
                         <div>
-                          <div style={{ fontWeight: 600, color: "var(--text-primary)" }}>
-                            {t.fullName}
-                          </div>
-                          <div style={{ fontSize: "11px", color: "var(--text-muted)", fontFamily: "monospace" }}>
+                          <div style={{ fontWeight: 600, color: "#0f172a" }}>{t.fullName}</div>
+                          <div style={{ fontSize: "11.5px", color: "#64748b", fontFamily: "monospace" }}>
                             ID: {t.id.slice(-6)}
                           </div>
                         </div>
@@ -371,21 +556,13 @@ export default function TeachersPage() {
                     </td>
                     <td>
                       <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12.5px" }}>
-                          <Mail size={12} color="var(--text-muted)" />
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px", color: "#334155" }}>
+                          <Mail size={13} color="#64748b" />
                           <span>{t.email}</span>
                         </div>
                         {t.phone && (
-                          <div
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: "6px",
-                              fontSize: "12px",
-                              color: "var(--text-muted)",
-                            }}
-                          >
-                            <Phone size={12} />
+                          <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: "#64748b" }}>
+                            <Phone size={12} color="#64748b" />
                             <span>{t.phone}</span>
                           </div>
                         )}
@@ -393,17 +570,12 @@ export default function TeachersPage() {
                     </td>
                     <td>
                       {t.sections.length === 0 ? (
-                        <span style={{ fontSize: "12.5px", color: "var(--text-muted)" }}>
-                          No section assigned
-                        </span>
+                        <span style={{ fontSize: "12.5px", color: "#94a3b8" }}>No class assigned</span>
                       ) : (
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: "5px" }}>
                           {t.sections.map((sec) => (
-                            <span key={sec.id} className="badge badge-teal" style={{ fontSize: "11.5px" }}>
-                              <span className="badge-dot" />
-                              <span>
-                                {sec.className} — {sec.name}
-                              </span>
+                            <span key={sec.id} className="office-pill office-pill-blue">
+                              {sec.className} — {sec.name}
                             </span>
                           ))}
                         </div>
@@ -411,34 +583,27 @@ export default function TeachersPage() {
                     </td>
                     <td>
                       {t.isActive ? (
-                        <span className="badge badge-success">
-                          <span className="badge-dot" />
-                          <span>Active</span>
-                        </span>
+                        <span className="office-pill office-pill-green">Active</span>
                       ) : (
-                        <span className="badge badge-danger">
-                          <span className="badge-dot" />
-                          <span>Inactive</span>
-                        </span>
+                        <span className="office-pill office-pill-red">Inactive</span>
                       )}
                     </td>
                     <td style={{ textAlign: "right" }}>
                       <button
-                        className={`btn btn-sm ${t.isActive ? "btn-secondary" : "btn-primary"}`}
+                        className={`office-btn office-btn-sm ${t.isActive ? "office-btn-secondary" : "office-btn-primary"}`}
                         onClick={() => handleToggleStatus(t)}
                         disabled={isToggling}
-                        style={{ height: "30px", fontSize: "12px", padding: "0 10px" }}
                       >
                         {isToggling ? (
                           <Sparkles size={12} className="animate-spin" />
                         ) : t.isActive ? (
                           <>
-                            <UserX size={12} />
+                            <UserX size={13} />
                             <span>Deactivate</span>
                           </>
                         ) : (
                           <>
-                            <UserCheck size={12} />
+                            <UserCheck size={13} />
                             <span>Activate</span>
                           </>
                         )}

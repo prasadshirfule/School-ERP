@@ -1,45 +1,65 @@
 import { NextResponse } from "next/server";
-import { getRequiredSession, unauthorized } from "@/lib/utils";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { unauthorized } from "@/lib/utils";
 import { tenantClient } from "@/lib/tenant";
-import { Prisma, Payment, StudentParent } from "@prisma/client";
-
-type ParentInvoiceWithRelations = Prisma.FeeInvoiceGetPayload<{
-  include: {
-    feeStructure: true;
-    payments: true;
-  };
-}>;
+import prisma from "@/lib/prisma";
+import { Payment } from "@prisma/client";
 
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await getRequiredSession();
-  if (!session) return unauthorized();
+  const session = await getServerSession(authOptions);
+  if (!session?.user || session.user.role !== "PARENT") return unauthorized();
 
   const { id: studentId } = await params;
-  const db = tenantClient(session.user.schoolId);
-
-  // Verify parent has access to this student
-  const parent = await db.parent.findUnique({
-    where: { userId: session.user.id },
-    include: { students: true },
-  });
-
-  if (!parent || !parent.students.some((sp: StudentParent) => sp.studentId === studentId)) {
-    return NextResponse.json({ error: "Student not found" }, { status: 404 });
+  if (!studentId) {
+    return NextResponse.json({ error: "Student ID is required" }, { status: 400 });
   }
 
-  const invoices = (await db.feeInvoice.findMany({
+  // Find verified parent profile linked to this user and student
+  const verifiedLink = await prisma.studentParent.findFirst({
+    where: {
+      studentId,
+      parent: {
+        userId: session.user.id,
+      },
+    },
+    include: {
+      student: { select: { schoolId: true, isActive: true } },
+      parent: {
+        include: {
+          school: { select: { id: true, isActive: true, status: true } },
+        },
+      },
+    },
+  });
+
+  if (!verifiedLink || !verifiedLink.parent?.school) {
+    return NextResponse.json({ error: "Student not found or access denied" }, { status: 404 });
+  }
+
+  // Immediate suspension check on the student's school
+  if (!verifiedLink.parent.school.isActive || verifiedLink.parent.school.status === "SUSPENDED") {
+    return NextResponse.json(
+      { error: "Access suspended for this school institution" },
+      { status: 403 }
+    );
+  }
+
+  // Tenant-scoped database query using the verified student's schoolId
+  const db = tenantClient(verifiedLink.parent.schoolId);
+  const invoices = await db.feeInvoice.findMany({
     where: { studentId },
     include: {
       feeStructure: true,
       payments: { orderBy: { paidAt: "desc" } },
     },
     orderBy: { dueDate: "desc" },
-  })) as ParentInvoiceWithRelations[];
+  });
 
-  const serialized = invoices.map((inv: ParentInvoiceWithRelations) => ({
+  const serialized = invoices.map((inv) => ({
     ...inv,
     amountDue: inv.amountDue.toFixed(2),
     discountAmount: inv.discountAmount.toFixed(2),

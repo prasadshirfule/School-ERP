@@ -55,16 +55,17 @@ export async function POST(request: Request) {
   try {
     const section = await ctx.db.section.create({
       data: {
+        schoolId: ctx.session.user.schoolId,
         classId,
         name: name.trim(),
-        academicYear,
+        academicYear: academicYear || "2026-27",
         classTeacherId: classTeacherId || null,
-      } as any,
+      },
       include: { class: true, classTeacher: true, _count: { select: { students: true } } },
     });
     return NextResponse.json(section, { status: 201 });
-  } catch (e: any) {
-    if (e.code === "P2002") {
+  } catch (e: unknown) {
+    if (typeof e === "object" && e && "code" in e && e.code === "P2002") {
       return badRequest("This section already exists for this class and academic year");
     }
     throw e;
@@ -90,7 +91,7 @@ export async function PATCH(request: Request) {
     return badRequest("Section id is required");
   }
 
-  const updateData: Record<string, any> = {};
+  const updateData: { name?: string; classTeacherId?: string | null } = {};
   if (name !== undefined) updateData.name = name.trim();
   if (classTeacherId !== undefined) {
     if (classTeacherId) {
@@ -109,16 +110,18 @@ export async function PATCH(request: Request) {
   try {
     const section = await ctx.db.section.update({
       where: { id },
-      data: updateData as any,
+      data: updateData,
       include: { class: true, classTeacher: true, _count: { select: { students: true } } },
     });
     return NextResponse.json(section);
-  } catch (e: any) {
-    if (e.code === "P2025") {
-      return NextResponse.json({ error: "Section not found" }, { status: 404 });
-    }
-    if (e.code === "P2002") {
-      return badRequest("A section with this name already exists for this class");
+  } catch (e: unknown) {
+    if (typeof e === "object" && e && "code" in e) {
+      if (e.code === "P2025") {
+        return NextResponse.json({ error: "Section not found" }, { status: 404 });
+      }
+      if (e.code === "P2002") {
+        return badRequest("A section with this name already exists for this class");
+      }
     }
     throw e;
   }
@@ -153,9 +156,9 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: "Section not found" }, { status: 404 });
   }
 
-  if ((section as any)._count.students > 0) {
+  if (section._count.students > 0) {
     return badRequest(
-      `Cannot delete this section — ${(section as any)._count.students} student(s) are currently enrolled. Reassign students first.`
+      `Cannot delete this section — ${section._count.students} student(s) are currently enrolled. Reassign students first.`
     );
   }
 

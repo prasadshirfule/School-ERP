@@ -1,13 +1,20 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import {
-  School, Plus, AlertCircle, Sparkles, ChevronDown, ChevronRight,
-  Users, Pencil, Trash2, UserPlus, Check, X, GraduationCap,
+  School,
+  Plus,
+  Sparkles,
+  ChevronDown,
+  ChevronRight,
+  Users,
+  Pencil,
+  Trash2,
+  Check,
+  X,
 } from "lucide-react";
 
 /* ─── Types ─── */
-
 type TeacherOption = { id: string; fullName: string };
 
 type SectionData = {
@@ -31,8 +38,6 @@ type SectionDraft = {
   classTeacherId: string;
 };
 
-/* ─── Helpers ─── */
-
 const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
 function generateDefaultSections(count: number): SectionDraft[] {
@@ -41,8 +46,6 @@ function generateDefaultSections(count: number): SectionDraft[] {
     classTeacherId: "",
   }));
 }
-
-/* ─── Main Component ─── */
 
 export default function ClassesPage() {
   const [classes, setClasses] = useState<ClassData[]>([]);
@@ -66,27 +69,18 @@ export default function ClassesPage() {
   };
 
   useEffect(() => {
-    let ignore = false;
     Promise.all([
       fetch("/api/classes").then((r) => r.json()),
       fetch("/api/teachers").then((r) => r.json()),
     ])
       .then(([classesData, teachersData]) => {
-        if (!ignore) {
-          setClasses(Array.isArray(classesData) ? classesData : []);
-          setTeachers(Array.isArray(teachersData) ? teachersData : []);
-          setLoading(false);
-        }
+        setClasses(Array.isArray(classesData) ? classesData : []);
+        setTeachers(Array.isArray(teachersData) ? teachersData : []);
+        setLoading(false);
       })
-      .catch(() => {
-        if (!ignore) setLoading(false);
-      });
-    return () => {
-      ignore = true;
-    };
+      .catch(() => setLoading(false));
   }, []);
 
-  // Update section drafts when section count changes
   const handleSectionCountChange = (count: number) => {
     const clamped = Math.max(1, Math.min(26, count));
     setSectionCount(clamped);
@@ -125,119 +119,151 @@ export default function ClassesPage() {
     setError("");
     setSubmitting(true);
 
-    const res = await fetch("/api/classes", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: className,
-        sections: sectionDrafts.map((d) => ({
-          name: d.name,
-          classTeacherId: d.classTeacherId || undefined,
-        })),
-      }),
-    });
+    try {
+      const res = await fetch("/api/classes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: className,
+          sections: sectionDrafts.map((d) => ({
+            name: d.name,
+            classTeacherId: d.classTeacherId || undefined,
+          })),
+        }),
+      });
 
-    setSubmitting(false);
+      setSubmitting(false);
 
-    if (!res.ok) {
-      const data = await res.json();
-      setError(data.error || "Failed to create class");
-      return;
+      if (!res.ok) {
+        const data = await res.json();
+        setError(data.error || "Failed to create class");
+        return;
+      }
+
+      resetForm();
+      fetchClasses();
+    } catch (err: unknown) {
+      setSubmitting(false);
+      setError(err instanceof Error ? err.message : "Failed to create class");
     }
-
-    resetForm();
-    fetchClasses();
   };
 
   if (loading) {
     return (
-      <div className="loading">
-        <Sparkles size={18} className="animate-spin" /> Loading classes...
+      <div className="office-page-container" style={{ padding: "60px 20px", textAlign: "center" }}>
+        <Sparkles size={22} className="animate-spin" color="#1e3a8a" style={{ margin: "0 auto 8px" }} />
+        <div style={{ color: "#64748b", fontSize: "14px" }}>Loading classes & sections...</div>
       </div>
     );
   }
 
   return (
-    <div>
-      <div className="page-header">
+    <div className="office-page-container">
+      {/* ─── Header ─── */}
+      <div className="office-header">
         <div>
-          <h1 className="page-title">Classes & Sections</h1>
-          <p className="page-subtitle">
-            Organize your school&apos;s academic grades and manage sections within each class
+          <h1 className="office-title">Classes & Sections</h1>
+          <p className="office-subtitle">
+            Configure academic grade levels, classroom sections, and class teacher allocations
           </p>
         </div>
-        <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>
-          <Plus size={16} />
-          <span>{showForm ? "Close" : "Add Class"}</span>
-        </button>
+        <div className="office-actions-bar">
+          <button
+            className="office-btn office-btn-primary"
+            onClick={() => setShowForm(!showForm)}
+          >
+            {showForm ? <X size={16} /> : <Plus size={16} />}
+            <span>{showForm ? "Cancel" : "Add Class"}</span>
+          </button>
+        </div>
       </div>
 
-      {/* ─── Creation Form ─── */}
+      {/* ─── Add Class Form ─── */}
       {showForm && (
-        <div className="card" style={{ marginBottom: "24px" }}>
-          <div className="card-header">
-            <h3 className="card-title">Create New Class with Sections</h3>
+        <div className="office-card" style={{ border: "2px solid #bfdbfe", background: "#f8fafc" }}>
+          <div className="office-card-header">
+            <h3 className="office-card-title">Create Class & Allocate Sections</h3>
           </div>
           {error && (
-            <div className="alert alert-error">
-              <AlertCircle size={16} />
-              <span>{error}</span>
+            <div style={{ color: "#dc2626", fontSize: "13px", marginBottom: "12px" }}>
+              {error}
             </div>
           )}
           <form onSubmit={handleCreate}>
-            <div className="form-row">
-              <div className="form-group">
-                <label className="form-label">Class Name</label>
+            <div className="office-form-grid-2">
+              <div className="office-form-group">
+                <label className="office-form-label">
+                  Class / Grade Name <span style={{ color: "#dc2626" }}>*</span>
+                </label>
                 <input
-                  className="form-input"
+                  type="text"
                   placeholder="e.g. Class 1, Grade 10"
                   value={className}
                   onChange={(e) => setClassName(e.target.value)}
+                  className="office-input"
+                  style={{ width: "100%" }}
                   required
                 />
               </div>
 
-              <div className="form-group">
-                <label className="form-label">Number of Sections</label>
+              <div className="office-form-group">
+                <label className="office-form-label">
+                  Number of Sections <span style={{ color: "#dc2626" }}>*</span>
+                </label>
                 <input
-                  className="form-input"
                   type="number"
                   min="1"
                   max="26"
                   value={sectionCount}
                   onChange={(e) => handleSectionCountChange(Number(e.target.value))}
+                  className="office-input"
+                  style={{ width: "100%" }}
                   required
                 />
               </div>
             </div>
 
             {/* Section preview cards */}
-            <div style={{ marginTop: "16px", marginBottom: "8px" }}>
-              <label className="form-label" style={{ marginBottom: "12px", display: "block" }}>
-                Section Preview
+            <div style={{ marginTop: "14px", marginBottom: "14px" }}>
+              <label className="office-form-label" style={{ marginBottom: "8px", display: "block" }}>
+                Section Assignments
               </label>
-              <div className="section-preview-grid">
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
+                  gap: "12px",
+                }}
+              >
                 {sectionDrafts.map((draft, idx) => (
-                  <div key={idx} className="section-preview-card">
-                    <div className="section-preview-badge">Section {idx + 1}</div>
-                    <div className="form-group" style={{ marginBottom: "8px" }}>
-                      <label className="form-label" style={{ fontSize: "12px" }}>Name</label>
+                  <div
+                    key={idx}
+                    style={{
+                      background: "#ffffff",
+                      border: "1px solid #cbd5e1",
+                      borderRadius: "8px",
+                      padding: "12px",
+                    }}
+                  >
+                    <div style={{ fontSize: "12px", fontWeight: 700, color: "#1e3a8a", marginBottom: "6px" }}>
+                      Section {idx + 1}
+                    </div>
+                    <div style={{ marginBottom: "8px" }}>
                       <input
-                        className="form-input"
+                        className="office-input"
                         value={draft.name}
                         onChange={(e) => updateDraftName(idx, e.target.value)}
                         placeholder="A"
                         required
-                        style={{ fontWeight: 600, textAlign: "center" }}
+                        style={{ height: "32px", fontSize: "13px", fontWeight: 600, textAlign: "center", width: "100%" }}
                       />
                     </div>
-                    <div className="form-group" style={{ marginBottom: "0" }}>
-                      <label className="form-label" style={{ fontSize: "12px" }}>Teacher (optional)</label>
+                    <div>
                       <select
-                        className="form-select"
+                        className="office-select"
                         value={draft.classTeacherId}
                         onChange={(e) => updateDraftTeacher(idx, e.target.value)}
-                        style={{ fontSize: "13px" }}
+                        style={{ height: "32px", fontSize: "12px", width: "100%" }}
                       >
                         <option value="">— Unassigned —</option>
                         {teachers.map((t) => (
@@ -253,10 +279,10 @@ export default function ClassesPage() {
             </div>
 
             <div style={{ display: "flex", gap: "10px", marginTop: "16px" }}>
-              <button className="btn btn-primary" type="submit" disabled={submitting}>
+              <button className="office-btn office-btn-primary" type="submit" disabled={submitting}>
                 {submitting ? "Creating..." : "Create Class & Sections"}
               </button>
-              <button className="btn btn-secondary" type="button" onClick={resetForm}>
+              <button className="office-btn office-btn-secondary" type="button" onClick={resetForm}>
                 Cancel
               </button>
             </div>
@@ -264,63 +290,56 @@ export default function ClassesPage() {
         </div>
       )}
 
-      {/* ─── Classes Table with Expandable Rows ─── */}
+      {/* ─── Class List ─── */}
       {classes.length === 0 ? (
-        <div className="card">
-          <div className="empty-state">
-            <div className="empty-state-icon-wrap">
-              <School size={26} color="#818cf8" />
-            </div>
-            <div className="empty-state-title">No classes created yet</div>
-            <p className="empty-state-text">
-              Add your first academic class to get your school roster organized.
-            </p>
-            <button
-              className="btn btn-primary btn-sm"
-              style={{ marginTop: "10px" }}
-              onClick={() => setShowForm(true)}
-            >
-              <Plus size={14} />
-              <span>Add First Class</span>
-            </button>
-          </div>
+        <div className="office-card" style={{ padding: "48px 20px", textAlign: "center" }}>
+          <School size={36} color="#94a3b8" style={{ margin: "0 auto 8px" }} />
+          <div style={{ fontSize: "16px", fontWeight: 700, color: "#0f172a" }}>No Classes Configured</div>
+          <p style={{ fontSize: "13px", color: "#64748b", margin: "4px 0 16px 0" }}>
+            Add your school grade levels (e.g. Class 1 to 12) to start assigning students and sections.
+          </p>
+          <button className="office-btn office-btn-primary office-btn-sm" onClick={() => setShowForm(true)}>
+            <Plus size={14} />
+            <span>Add First Class</span>
+          </button>
         </div>
       ) : (
-        <div className="classes-list">
+        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
           {classes.map((cls) => {
-            const totalStudents = cls.sections.reduce(
-              (sum, s) => sum + (s._count?.students || 0),
-              0
-            );
             const isExpanded = expandedClassId === cls.id;
+            const totalStudents = cls.sections.reduce((acc, s) => acc + s._count.students, 0);
 
             return (
-              <div key={cls.id} className={`class-row-card ${isExpanded ? "class-row-expanded" : ""}`}>
-                {/* Class header row */}
+              <div key={cls.id} className="office-card" style={{ padding: 0, overflow: "hidden" }}>
                 <div
-                  className="class-row-header"
                   onClick={() => setExpandedClassId(isExpanded ? null : cls.id)}
+                  style={{
+                    padding: "16px 20px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    cursor: "pointer",
+                    background: isExpanded ? "#f8fafc" : "#ffffff",
+                    borderBottom: isExpanded ? "1px solid #e2e8f0" : "none",
+                  }}
                 >
-                  <div className="class-row-left">
-                    <span className="class-expand-icon">
+                  <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                    <div style={{ color: "#64748b" }}>
                       {isExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
-                    </span>
+                    </div>
                     <div>
-                      <div className="class-row-name">{cls.name}</div>
-                      <div className="class-row-meta">
-                        Level {cls.order} · {cls.sections.length} section{cls.sections.length !== 1 ? "s" : ""}
+                      <div style={{ fontSize: "16px", fontWeight: 700, color: "#0f172a" }}>{cls.name}</div>
+                      <div style={{ fontSize: "12.5px", color: "#64748b" }}>
+                        Level {cls.order} • {cls.sections.length} section{cls.sections.length !== 1 ? "s" : ""}
                       </div>
                     </div>
                   </div>
-                  <div className="class-row-right">
-                    <span className="badge badge-teal">
-                      <Users size={12} />
-                      <span>{totalStudents} student{totalStudents !== 1 ? "s" : ""}</span>
-                    </span>
-                  </div>
+                  <span className="office-pill office-pill-blue">
+                    <Users size={12} />
+                    <span>{totalStudents} student{totalStudents !== 1 ? "s" : ""}</span>
+                  </span>
                 </div>
 
-                {/* Expanded section details */}
                 {isExpanded && (
                   <ExpandedSections
                     cls={cls}
@@ -336,8 +355,6 @@ export default function ClassesPage() {
     </div>
   );
 }
-
-/* ─── Expanded Sections Sub-component ─── */
 
 function ExpandedSections({
   cls,
@@ -362,28 +379,33 @@ function ExpandedSections({
     setActionLoading(true);
     setError("");
 
-    const res = await fetch("/api/sections", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        classId: cls.id,
-        name: newSectionName.trim(),
-        academicYear: "2026-27",
-        classTeacherId: newSectionTeacher || undefined,
-      }),
-    });
+    try {
+      const res = await fetch("/api/sections", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          classId: cls.id,
+          name: newSectionName.trim(),
+          academicYear: "2026-27",
+          classTeacherId: newSectionTeacher || undefined,
+        }),
+      });
 
-    setActionLoading(false);
-    if (!res.ok) {
-      const data = await res.json();
-      setError(data.error || "Failed to add section");
-      return;
+      setActionLoading(false);
+      if (!res.ok) {
+        const data = await res.json();
+        setError(data.error || "Failed to add section");
+        return;
+      }
+
+      setAddingSection(false);
+      setNewSectionName("");
+      setNewSectionTeacher("");
+      onRefresh();
+    } catch (err: unknown) {
+      setActionLoading(false);
+      setError(err instanceof Error ? err.message : "Failed to add section");
     }
-
-    setAddingSection(false);
-    setNewSectionName("");
-    setNewSectionTeacher("");
-    onRefresh();
   };
 
   const startEdit = (section: SectionData) => {
@@ -398,25 +420,30 @@ function ExpandedSections({
     setActionLoading(true);
     setError("");
 
-    const res = await fetch("/api/sections", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        id: editingId,
-        name: editName.trim(),
-        classTeacherId: editTeacher || null,
-      }),
-    });
+    try {
+      const res = await fetch("/api/sections", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: editingId,
+          name: editName.trim(),
+          classTeacherId: editTeacher || null,
+        }),
+      });
 
-    setActionLoading(false);
-    if (!res.ok) {
-      const data = await res.json();
-      setError(data.error || "Failed to update section");
-      return;
+      setActionLoading(false);
+      if (!res.ok) {
+        const data = await res.json();
+        setError(data.error || "Failed to update section");
+        return;
+      }
+
+      setEditingId(null);
+      onRefresh();
+    } catch (err: unknown) {
+      setActionLoading(false);
+      setError(err instanceof Error ? err.message : "Failed to update section");
     }
-
-    setEditingId(null);
-    onRefresh();
   };
 
   const handleDelete = async (section: SectionData) => {
@@ -432,193 +459,171 @@ function ExpandedSections({
     setActionLoading(true);
     setError("");
 
-    const res = await fetch("/api/sections", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: section.id }),
-    });
+    try {
+      const res = await fetch("/api/sections", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: section.id }),
+      });
 
-    setActionLoading(false);
-    if (!res.ok) {
-      const data = await res.json();
-      setError(data.error || "Failed to delete section");
-      return;
+      setActionLoading(false);
+      if (!res.ok) {
+        const data = await res.json();
+        setError(data.error || "Failed to delete section");
+        return;
+      }
+
+      onRefresh();
+    } catch (err: unknown) {
+      setActionLoading(false);
+      setError(err instanceof Error ? err.message : "Failed to delete section");
     }
-
-    onRefresh();
   };
 
   return (
-    <div className="class-sections-panel">
+    <div style={{ padding: "16px 20px", background: "#f8fafc" }}>
       {error && (
-        <div className="alert alert-error" style={{ margin: "0 0 12px 0" }}>
-          <AlertCircle size={14} />
-          <span style={{ fontSize: "13px" }}>{error}</span>
+        <div style={{ color: "#dc2626", fontSize: "13px", marginBottom: "12px" }}>
+          {error}
         </div>
       )}
 
-      {cls.sections.length === 0 ? (
-        <div style={{ textAlign: "center", padding: "16px 0", color: "var(--text-muted)", fontSize: "14px" }}>
-          No sections yet — add one below.
-        </div>
-      ) : (
-        <div className="section-cards-grid">
-          {cls.sections.map((section) => {
-            const isEditing = editingId === section.id;
+      <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "14px" }}>
+        {cls.sections.map((section) => {
+          const isEditingThis = editingId === section.id;
+          return (
+            <div
+              key={section.id}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "10px 14px",
+                background: "#ffffff",
+                border: "1px solid #e2e8f0",
+                borderRadius: "8px",
+                flexWrap: "wrap",
+                gap: "10px",
+              }}
+            >
+              {isEditingThis ? (
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", flex: 1 }}>
+                  <input
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    className="office-input"
+                    style={{ width: "70px", height: "32px", fontSize: "13px" }}
+                  />
+                  <select
+                    value={editTeacher}
+                    onChange={(e) => setEditTeacher(e.target.value)}
+                    className="office-select"
+                    style={{ height: "32px", fontSize: "12.5px" }}
+                  >
+                    <option value="">— Unassigned —</option>
+                    {teachers.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.fullName}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={handleSaveEdit}
+                    disabled={actionLoading}
+                    className="office-btn office-btn-primary office-btn-sm"
+                  >
+                    <Check size={12} />
+                  </button>
+                  <button
+                    onClick={() => setEditingId(null)}
+                    className="office-btn office-btn-secondary office-btn-sm"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                    <span style={{ fontWeight: 700, fontSize: "14px", color: "#0f172a" }}>
+                      Section {section.name}
+                    </span>
+                    <span style={{ fontSize: "12.5px", color: "#64748b" }}>
+                      Teacher:{" "}
+                      <strong style={{ color: "#334155" }}>
+                        {section.classTeacher?.fullName || "Unassigned"}
+                      </strong>
+                    </span>
+                    <span style={{ fontSize: "12px", color: "#94a3b8" }}>
+                      ({section._count.students} students)
+                    </span>
+                  </div>
 
-            return (
-              <div key={section.id} className="section-detail-card">
-                {isEditing ? (
-                  /* ─── Edit Mode ─── */
-                  <>
-                    <div className="form-group" style={{ marginBottom: "8px" }}>
-                      <label className="form-label" style={{ fontSize: "12px" }}>Name</label>
-                      <input
-                        className="form-input"
-                        value={editName}
-                        onChange={(e) => setEditName(e.target.value)}
-                        autoFocus
-                      />
-                    </div>
-                    <div className="form-group" style={{ marginBottom: "10px" }}>
-                      <label className="form-label" style={{ fontSize: "12px" }}>Class Teacher</label>
-                      <select
-                        className="form-select"
-                        value={editTeacher}
-                        onChange={(e) => setEditTeacher(e.target.value)}
-                        style={{ fontSize: "13px" }}
-                      >
-                        <option value="">— Unassigned —</option>
-                        {teachers.map((t) => (
-                          <option key={t.id} value={t.id}>{t.fullName}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div style={{ display: "flex", gap: "6px" }}>
-                      <button
-                        className="btn btn-primary btn-sm"
-                        onClick={handleSaveEdit}
-                        disabled={actionLoading}
-                      >
-                        <Check size={13} />
-                        <span>Save</span>
-                      </button>
-                      <button
-                        className="btn btn-secondary btn-sm"
-                        onClick={() => setEditingId(null)}
-                      >
-                        <X size={13} />
-                        <span>Cancel</span>
-                      </button>
-                    </div>
-                  </>
-                ) : (
-                  /* ─── Display Mode ─── */
-                  <>
-                    <div className="section-detail-header">
-                      <span className="section-detail-name">Section {section.name}</span>
-                      <div className="section-detail-actions">
-                        <button
-                          className="btn-icon"
-                          title="Edit"
-                          onClick={() => startEdit(section)}
-                        >
-                          <Pencil size={14} />
-                        </button>
-                        <button
-                          className="btn-icon btn-icon-danger"
-                          title={
-                            section._count.students > 0
-                              ? "Cannot delete — students enrolled"
-                              : "Delete section"
-                          }
-                          onClick={() => handleDelete(section)}
-                          disabled={section._count.students > 0}
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </div>
-                    <div className="section-detail-info">
-                      <div className="section-detail-row">
-                        <GraduationCap size={13} />
-                        <span>{section._count.students} student{section._count.students !== 1 ? "s" : ""}</span>
-                      </div>
-                      <div className="section-detail-row">
-                        <UserPlus size={13} />
-                        <span>
-                          {section.classTeacher?.fullName || (
-                            <em style={{ color: "var(--text-muted)" }}>No teacher assigned</em>
-                          )}
-                        </span>
-                      </div>
-                      <div className="section-detail-row" style={{ color: "var(--text-muted)", fontSize: "12px" }}>
-                        AY {section.academicYear}
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
+                  <div style={{ display: "flex", gap: "6px" }}>
+                    <button
+                      onClick={() => startEdit(section)}
+                      className="office-btn office-btn-secondary office-btn-sm"
+                    >
+                      <Pencil size={12} />
+                      <span>Edit</span>
+                    </button>
+                    <button
+                      onClick={() => handleDelete(section)}
+                      className="office-btn office-btn-secondary office-btn-sm"
+                      style={{ color: "#dc2626" }}
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          );
+        })}
+      </div>
 
-      {/* Add Section inline form */}
       {addingSection ? (
-        <div className="add-section-inline">
-          <div style={{ display: "flex", gap: "10px", alignItems: "flex-end", flexWrap: "wrap" }}>
-            <div className="form-group" style={{ marginBottom: "0", flex: "1", minWidth: "120px" }}>
-              <label className="form-label" style={{ fontSize: "12px" }}>Section Name</label>
-              <input
-                className="form-input"
-                placeholder="e.g. C"
-                value={newSectionName}
-                onChange={(e) => setNewSectionName(e.target.value)}
-                autoFocus
-              />
-            </div>
-            <div className="form-group" style={{ marginBottom: "0", flex: "1", minWidth: "160px" }}>
-              <label className="form-label" style={{ fontSize: "12px" }}>Teacher (optional)</label>
-              <select
-                className="form-select"
-                value={newSectionTeacher}
-                onChange={(e) => setNewSectionTeacher(e.target.value)}
-                style={{ fontSize: "13px" }}
-              >
-                <option value="">— Unassigned —</option>
-                {teachers.map((t) => (
-                  <option key={t.id} value={t.id}>{t.fullName}</option>
-                ))}
-              </select>
-            </div>
-            <div style={{ display: "flex", gap: "6px" }}>
-              <button
-                className="btn btn-primary btn-sm"
-                onClick={handleAddSection}
-                disabled={actionLoading || !newSectionName.trim()}
-              >
-                <Check size={13} />
-                <span>Add</span>
-              </button>
-              <button
-                className="btn btn-secondary btn-sm"
-                onClick={() => { setAddingSection(false); setError(""); }}
-              >
-                <X size={13} />
-                <span>Cancel</span>
-              </button>
-            </div>
-          </div>
+        <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
+          <input
+            placeholder="Section Name (e.g. C)"
+            value={newSectionName}
+            onChange={(e) => setNewSectionName(e.target.value)}
+            className="office-input"
+            style={{ width: "160px", height: "34px", fontSize: "13px" }}
+          />
+          <select
+            value={newSectionTeacher}
+            onChange={(e) => setNewSectionTeacher(e.target.value)}
+            className="office-select"
+            style={{ height: "34px", fontSize: "12.5px" }}
+          >
+            <option value="">-- Assign Teacher --</option>
+            {teachers.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.fullName}
+              </option>
+            ))}
+          </select>
+          <button
+            onClick={handleAddSection}
+            disabled={actionLoading || !newSectionName.trim()}
+            className="office-btn office-btn-primary office-btn-sm"
+          >
+            Save Section
+          </button>
+          <button
+            onClick={() => setAddingSection(false)}
+            className="office-btn office-btn-secondary office-btn-sm"
+          >
+            Cancel
+          </button>
         </div>
       ) : (
         <button
-          className="btn btn-secondary btn-sm"
-          style={{ marginTop: "8px" }}
-          onClick={() => { setAddingSection(true); setError(""); }}
+          onClick={() => setAddingSection(true)}
+          className="office-btn office-btn-secondary office-btn-sm"
         >
           <Plus size={13} />
-          <span>Add Section</span>
+          <span>Add Section to {cls.name}</span>
         </button>
       )}
     </div>

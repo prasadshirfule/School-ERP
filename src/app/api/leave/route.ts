@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { getTenantDb, unauthorized, badRequest, forbidden, hasRole } from "@/lib/utils";
 
 /**
@@ -20,7 +21,7 @@ export async function GET(request: Request) {
   const status = searchParams.get("status") || "";
   const isStaff = role === "TEACHER" || role === "ACCOUNTANT";
 
-  const whereClause: any = {};
+  const whereClause: Prisma.LeaveRequestWhereInput = {};
   if (isStaff) {
     whereClause.userId = ctx.session.user.id;
   }
@@ -80,13 +81,14 @@ export async function POST(request: Request) {
 
   const leave = await ctx.db.leaveRequest.create({
     data: {
+      schoolId: ctx.session.user.schoolId,
       userId: ctx.session.user.id,
       leaveType,
       startDate: start,
       endDate: end,
       reason,
       status: "PENDING",
-    } as any,
+    },
     include: {
       user: {
         select: {
@@ -130,7 +132,7 @@ export async function PATCH(request: Request) {
       status,
       adminRemark,
       approvedByUserId: ctx.session.user.id,
-    } as any,
+    },
     include: {
       user: {
         select: {

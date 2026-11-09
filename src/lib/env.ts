@@ -24,6 +24,7 @@ const envSchema = z.object({
   NEXTAUTH_URL: z.string().url().optional(),
   AUTH_TRUST_HOST: z.string().optional(),
   PII_ENCRYPTION_KEY: z.string().min(32, "PII_ENCRYPTION_KEY must be at least 32 characters long").optional(),
+  RATE_LIMIT_HMAC_SECRET: z.string().min(32, "RATE_LIMIT_HMAC_SECRET must be at least 32 characters long").optional(),
   STORAGE_PROVIDER: z.enum(["local", "s3"]).default("local"),
   RAZORPAY_KEY_ID: z.string().optional(),
   RAZORPAY_KEY_SECRET: z.string().optional(),
@@ -71,6 +72,7 @@ export function validateEnv(): EnvConfig {
     NEXTAUTH_URL: rawNextAuthUrl,
     AUTH_TRUST_HOST: process.env.AUTH_TRUST_HOST,
     PII_ENCRYPTION_KEY: process.env.PII_ENCRYPTION_KEY,
+    RATE_LIMIT_HMAC_SECRET: process.env.RATE_LIMIT_HMAC_SECRET,
     STORAGE_PROVIDER: process.env.STORAGE_PROVIDER,
     RAZORPAY_KEY_ID: process.env.RAZORPAY_KEY_ID,
     RAZORPAY_KEY_SECRET: process.env.RAZORPAY_KEY_SECRET,
@@ -109,6 +111,20 @@ export function validateEnv(): EnvConfig {
     }
     if (!rawEnv.NEON_DATABASE_URL_UNPOOLED) {
       throw new Error("FATAL: NEON_DATABASE_URL_UNPOOLED is missing in production environment.");
+    }
+
+    if (!process.env.RATE_LIMIT_HMAC_SECRET || process.env.RATE_LIMIT_HMAC_SECRET.trim().length < 32) {
+      throw new Error(
+        "FATAL SECURITY CONFIGURATION: Dedicated RATE_LIMIT_HMAC_SECRET is missing or less than 32 characters in production. " +
+        "Generate a private key with 'openssl rand -hex 32' and configure it in your deployment environment. " +
+        "Falling back to AUTH_SECRET in production is strictly prohibited."
+      );
+    }
+    if (FORBIDDEN_DEMO_SECRETS.has(process.env.RATE_LIMIT_HMAC_SECRET)) {
+      throw new Error(
+        "FATAL SECURITY CONFIGURATION: RATE_LIMIT_HMAC_SECRET is set to an insecure demo fallback string. " +
+        "Configure a private, unique 32+ character key for production."
+      );
     }
   } else if (isBuildPhase && isProd) {
     if (rawAuthSecret && FORBIDDEN_DEMO_SECRETS.has(rawAuthSecret)) {
@@ -204,4 +220,41 @@ export function getPIIEncryptionKey(): string {
 
 export function isProduction(): boolean {
   return process.env.NODE_ENV === "production";
+}
+
+/**
+ * Returns the dedicated 32+ character HMAC secret for rate-limiting identifier privacy.
+ * In production, strictly requires RATE_LIMIT_HMAC_SECRET and prohibits falling back to AUTH_SECRET.
+ */
+export function getRateLimitHmacSecret(): string {
+  const secret = process.env.RATE_LIMIT_HMAC_SECRET;
+  const isProd = process.env.NODE_ENV === "production";
+  const isBuildPhase =
+    process.env.NEXT_PHASE === "phase-production-build" ||
+    process.env.npm_lifecycle_event === "build";
+
+  if (secret && secret.trim().length >= 32) {
+    if (isProd && !isBuildPhase && FORBIDDEN_DEMO_SECRETS.has(secret)) {
+      throw new Error(
+        "FATAL SECURITY CONFIGURATION: RATE_LIMIT_HMAC_SECRET is set to an insecure demo fallback string. " +
+        "Configure a private, unique 32+ character key for production."
+      );
+    }
+    return secret;
+  }
+
+  if (isProd && !isBuildPhase) {
+    throw new Error(
+      "FATAL SECURITY CONFIGURATION: Dedicated RATE_LIMIT_HMAC_SECRET is missing or less than 32 characters in production. " +
+      "Configure RATE_LIMIT_HMAC_SECRET in your Vercel project environment variables (generate with 'openssl rand -hex 32'). " +
+      "Falling back to AUTH_SECRET in production is strictly prohibited."
+    );
+  }
+
+  if (isBuildPhase && isProd) {
+    return "build_time_placeholder_rate_limit_hmac_secret_32chars!";
+  }
+
+  // Safe development/test fallback only:
+  return secret || process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || "dev-rate-limit-hmac-salt-minimum-32-chars-long!";
 }

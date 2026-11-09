@@ -12,7 +12,24 @@
     "test:tenant": "ts-node scripts/test-tenant-isolation.ts",
     "test:security": "ts-node scripts/test-security-suite.ts",
     "test:auth": "ts-node scripts/test-auth-regression.ts",
-    "test": "npm run check:tenant-scoping && npm run test:tenant && npm run test:security && npm run test:auth"
+    "test:public-access": "ts-node scripts/test-public-distribution-access.ts",
+    "test:multi-school-parent": "ts-node scripts/test-multi-school-parent.ts",
+    "test:suspension-revocation": "ts-node scripts/test-school-suspension-revocation.ts",
+    "test:totp": "ts-node scripts/test-totp-unit.ts",
+    "test:mfa": "ts-node scripts/test-mfa-security.ts",
+    "test:phase2-db": "ts-node scripts/test-phase2-database-security.ts",
+    "test:phase2-evidence": "ts-node scripts/test-phase2-concurrency-evidence.ts",
+    "test:subscription": "ts-node scripts/test-subscription-lifecycle.ts",
+    "test:archive-export": "ts-node scripts/test-student-archive-export.ts",
+    "test:parent-link": "ts-node scripts/test-parent-link-approval.ts",
+    "test:webhooks": "ts-node scripts/test-razorpay-webhooks.ts",
+    "test:notifications": "ts-node scripts/test-notifications.ts",
+    "test:backup-storage": "ts-node scripts/test-backup-and-storage.ts",
+    "verify:android": "ts-node scripts/verify-android-readiness.ts",
+    "test:e2e": "ts-node scripts/test-e2e-workflow.ts",
+    "test:playwright": "playwright test",
+    "test:saas": "npm run test:subscription && npm run test:archive-export && npm run test:parent-link && npm run test:webhooks && npm run test:notifications && npm run test:backup-storage && npm run verify:android",
+    "test": "npm run check:tenant-scoping && npm run test:tenant && npm run test:security && npm run test:auth && npm run test:public-access && npm run test:multi-school-parent && npm run test:suspension-revocation && npm run test:totp && npm run test:mfa && npm run test:phase2-db && npm run test:phase2-evidence && npm run test:saas && npm run test:e2e"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"
@@ -20,6 +37,11 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1156.0",
     "@aws-sdk/s3-request-presigner": "^3.1156.0",
+    "@capacitor/android": "^8.6.0",
+    "@capacitor/cli": "^8.6.0",
+    "@capacitor/core": "^8.6.0",
+    "@capacitor/splash-screen": "^8.0.2",
+    "@capacitor/status-bar": "^8.0.4",
     "@neon/config": "^1.11.3",
     "@neon/env": "^1.6.15",
     "@prisma/client": "^6.19.3",
@@ -34,6 +56,7 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.0",
     "@tailwindcss/postcss": "^4",
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20",

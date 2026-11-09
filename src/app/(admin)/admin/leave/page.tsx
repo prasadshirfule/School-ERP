@@ -1,7 +1,14 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Calendar, CheckCircle2, XCircle, Clock, AlertCircle, Sparkles, User, FileText, Check, X, Filter } from "lucide-react";
+import {
+  CheckCircle2,
+  XCircle,
+  Clock,
+  Sparkles,
+  Check,
+  X,
+} from "lucide-react";
 
 type LeaveRequest = {
   id: string;
@@ -78,8 +85,8 @@ export default function AdminLeavePage() {
 
       setTargetRequest(null);
       fetchRequests();
-    } catch (err: any) {
-      setError(err.message || "Failed to submit review");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to submit review");
     } finally {
       setSubmitting(false);
     }
@@ -96,8 +103,7 @@ export default function AdminLeavePage() {
     const s = new Date(startStr);
     const e = new Date(endStr);
     const diffTime = Math.abs(e.getTime() - s.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-    return diffDays;
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
   };
 
   const pendingCount = requests.filter((r) => r.status === "PENDING").length;
@@ -111,241 +117,312 @@ export default function AdminLeavePage() {
 
   if (loading) {
     return (
-      <div className="loading">
-        <Sparkles size={18} className="animate-spin" /> Loading staff leave requests...
+      <div className="office-page-container" style={{ padding: "60px 20px", textAlign: "center" }}>
+        <Sparkles size={22} className="animate-spin" color="#1e3a8a" style={{ margin: "0 auto 8px" }} />
+        <div style={{ color: "#64748b", fontSize: "14px" }}>Loading staff leave applications...</div>
       </div>
     );
   }
 
   return (
-    <div>
-      <div className="page-header">
+    <div className="office-page-container">
+      {/* ─── Header ─── */}
+      <div className="office-header">
         <div>
-          <h1 className="page-title">Staff Leave Management</h1>
-          <p className="page-subtitle">Review, approve, and track leave applications from teaching and administrative staff</p>
+          <h1 className="office-title">Staff Leave Management</h1>
+          <p className="office-subtitle">
+            Review leave requests from teaching faculty, check duration, and record approvals
+          </p>
         </div>
       </div>
 
-      {/* Summary Cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "16px", marginBottom: "24px" }}>
-        <div className="stat-card" style={{ borderLeft: "4px solid #fbbf24" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span className="stat-label">Pending Approval</span>
-            <Clock size={18} color="#fbbf24" />
-          </div>
-          <div className="stat-value" style={{ color: "#fbbf24" }}>{pendingCount}</div>
-        </div>
-
-        <div className="stat-card" style={{ borderLeft: "4px solid #34d399" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span className="stat-label">Approved Leaves</span>
-            <CheckCircle2 size={18} color="#34d399" />
-          </div>
-          <div className="stat-value" style={{ color: "#34d399" }}>{approvedCount}</div>
-        </div>
-
-        <div className="stat-card" style={{ borderLeft: "4px solid #f87171" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span className="stat-label">Rejected</span>
-            <XCircle size={18} color="#f87171" />
-          </div>
-          <div className="stat-value" style={{ color: "#f87171" }}>{rejectedCount}</div>
-        </div>
-      </div>
-
-      {/* Filter Tabs */}
-      <div style={{ display: "flex", gap: "8px", marginBottom: "16px", flexWrap: "wrap" }}>
-        {["ALL", "PENDING", "APPROVED", "REJECTED"].map((st) => (
-          <button
-            key={st}
-            className={`btn btn-sm ${selectedStatus === st ? "btn-primary" : "btn-secondary"}`}
-            onClick={() => setSelectedStatus(st)}
+      {/* ─── Metric Highlights ─── */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+          gap: "14px",
+          marginBottom: "24px",
+        }}
+      >
+        <div
+          style={{
+            background: "#ffffff",
+            border: "1px solid #e2e8f0",
+            borderRadius: "10px",
+            padding: "16px",
+            display: "flex",
+            alignItems: "center",
+            gap: "14px",
+          }}
+        >
+          <div
+            style={{
+              width: "44px",
+              height: "44px",
+              borderRadius: "8px",
+              background: "#fffbeb",
+              color: "#d97706",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
           >
-            {st === "ALL" ? `All Requests (${requests.length})` : `${st.charAt(0) + st.slice(1).toLowerCase()} (${requests.filter((r) => r.status === st).length})`}
+            <Clock size={22} />
+          </div>
+          <div>
+            <div style={{ fontSize: "12px", color: "#64748b", fontWeight: 600 }}>Pending Review</div>
+            <div style={{ fontSize: "20px", fontWeight: 700, color: "#d97706" }}>{pendingCount}</div>
+          </div>
+        </div>
+
+        <div
+          style={{
+            background: "#ffffff",
+            border: "1px solid #e2e8f0",
+            borderRadius: "10px",
+            padding: "16px",
+            display: "flex",
+            alignItems: "center",
+            gap: "14px",
+          }}
+        >
+          <div
+            style={{
+              width: "44px",
+              height: "44px",
+              borderRadius: "8px",
+              background: "#ecfdf5",
+              color: "#059669",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <CheckCircle2 size={22} />
+          </div>
+          <div>
+            <div style={{ fontSize: "12px", color: "#64748b", fontWeight: 600 }}>Approved Leaves</div>
+            <div style={{ fontSize: "20px", fontWeight: 700, color: "#059669" }}>{approvedCount}</div>
+          </div>
+        </div>
+
+        <div
+          style={{
+            background: "#ffffff",
+            border: "1px solid #e2e8f0",
+            borderRadius: "10px",
+            padding: "16px",
+            display: "flex",
+            alignItems: "center",
+            gap: "14px",
+          }}
+        >
+          <div
+            style={{
+              width: "44px",
+              height: "44px",
+              borderRadius: "8px",
+              background: "#fef2f2",
+              color: "#dc2626",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <XCircle size={22} />
+          </div>
+          <div>
+            <div style={{ fontSize: "12px", color: "#64748b", fontWeight: 600 }}>Rejected</div>
+            <div style={{ fontSize: "20px", fontWeight: 700, color: "#dc2626" }}>{rejectedCount}</div>
+          </div>
+        </div>
+      </div>
+
+      {/* ─── Status Filter Tabs ─── */}
+      <div style={{ display: "flex", gap: "8px", marginBottom: "20px", flexWrap: "wrap" }}>
+        {[
+          { key: "ALL", label: `All Requests (${requests.length})` },
+          { key: "PENDING", label: `Pending (${pendingCount})` },
+          { key: "APPROVED", label: `Approved (${approvedCount})` },
+          { key: "REJECTED", label: `Rejected (${rejectedCount})` },
+        ].map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => setSelectedStatus(tab.key)}
+            className={`office-btn office-btn-sm ${selectedStatus === tab.key ? "office-btn-primary" : "office-btn-secondary"}`}
+          >
+            {tab.label}
           </button>
         ))}
       </div>
 
-      {/* Requests Table */}
-      {filteredRequests.length === 0 ? (
-        <div className="card empty-state" style={{ padding: "40px 20px" }}>
-          <Clock size={36} color="var(--text-muted)" style={{ marginBottom: "12px" }} />
-          <div className="empty-state-title">No Leave Requests Found</div>
-          <p style={{ color: "var(--text-secondary)" }}>
-            {selectedStatus === "ALL" ? "No staff leave applications have been submitted yet." : `No ${selectedStatus.toLowerCase()} leave requests.`}
-          </p>
-        </div>
-      ) : (
-        <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-          <div className="table-responsive">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Staff Member</th>
-                  <th>Leave Type</th>
-                  <th>Duration</th>
-                  <th>Days</th>
-                  <th>Reason</th>
-                  <th>Status</th>
-                  <th>Remark</th>
-                  <th style={{ textAlign: "right" }}>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredRequests.map((req) => {
-                  const staffName = req.user.teacherProfile?.fullName || req.user.email;
-                  const days = calcDays(req.startDate, req.endDate);
+      {/* ─── Requests Table ─── */}
+      <div className="office-table-wrapper">
+        <table className="office-table">
+          <thead>
+            <tr>
+              <th>Staff Member</th>
+              <th>Leave Type</th>
+              <th>Duration</th>
+              <th>Reason</th>
+              <th>Status</th>
+              <th style={{ textAlign: "right" }}>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredRequests.length === 0 ? (
+              <tr>
+                <td colSpan={6} style={{ padding: "40px 20px", textAlign: "center", color: "#64748b" }}>
+                  No leave requests found for this status.
+                </td>
+              </tr>
+            ) : (
+              filteredRequests.map((req) => {
+                const days = calcDays(req.startDate, req.endDate);
+                const applicantName = req.user.teacherProfile?.fullName || req.user.email;
+                const isPending = req.status === "PENDING";
 
-                  return (
-                    <tr key={req.id}>
-                      <td>
-                        <div style={{ fontWeight: 600, color: "var(--text-primary)" }}>{staffName}</div>
-                        <div style={{ fontSize: "11px", color: "var(--text-muted)" }}>{req.user.role} • {req.user.email}</div>
-                      </td>
-                      <td>
-                        <span className="badge badge-teal">{req.leaveType}</span>
-                      </td>
-                      <td style={{ fontSize: "12.5px" }}>
-                        <div>{formatDisplayDate(req.startDate)} to</div>
-                        <div style={{ color: "var(--text-muted)" }}>{formatDisplayDate(req.endDate)}</div>
-                      </td>
-                      <td style={{ fontWeight: 600 }}>{days} {days === 1 ? "day" : "days"}</td>
-                      <td style={{ maxWidth: "200px", fontSize: "13px" }}>{req.reason}</td>
-                      <td>
-                        {req.status === "PENDING" && <span className="badge badge-warning">Pending Review</span>}
-                        {req.status === "APPROVED" && <span className="badge badge-success">Approved</span>}
-                        {req.status === "REJECTED" && <span className="badge badge-danger">Rejected</span>}
-                      </td>
-                      <td style={{ fontSize: "12px", color: "var(--text-secondary)", maxWidth: "160px" }}>
-                        {req.adminRemark || "—"}
-                      </td>
-                      <td style={{ textAlign: "right" }}>
-                        {req.status === "PENDING" ? (
-                          <div style={{ display: "flex", justifyContent: "flex-end", gap: "6px" }}>
-                            <button
-                              className="btn btn-sm btn-primary"
-                              onClick={() => openReviewModal(req, "APPROVED")}
-                              style={{ padding: "4px 8px", fontSize: "12px" }}
-                            >
-                              <Check size={13} /> Approve
-                            </button>
-                            <button
-                              className="btn btn-sm btn-ghost"
-                              onClick={() => openReviewModal(req, "REJECTED")}
-                              style={{ padding: "4px 8px", fontSize: "12px", color: "var(--danger)" }}
-                            >
-                              <X size={13} /> Reject
-                            </button>
-                          </div>
-                        ) : (
+                return (
+                  <tr key={req.id}>
+                    <td>
+                      <div style={{ fontWeight: 600, color: "#0f172a" }}>{applicantName}</div>
+                      <div style={{ fontSize: "12px", color: "#64748b" }}>{req.user.email}</div>
+                    </td>
+                    <td>
+                      <span className="office-pill office-pill-blue">{req.leaveType}</span>
+                    </td>
+                    <td>
+                      <div style={{ fontWeight: 600, color: "#0f172a" }}>
+                        {formatDisplayDate(req.startDate)} – {formatDisplayDate(req.endDate)}
+                      </div>
+                      <div style={{ fontSize: "12px", color: "#64748b" }}>
+                        {days} day{days !== 1 ? "s" : ""}
+                      </div>
+                    </td>
+                    <td style={{ maxWidth: "260px" }}>
+                      <div style={{ fontSize: "13px", color: "#334155" }}>{req.reason}</div>
+                      {req.adminRemark && (
+                        <div style={{ fontSize: "11.5px", color: "#64748b", marginTop: "4px" }}>
+                          Remark: {req.adminRemark}
+                        </div>
+                      )}
+                    </td>
+                    <td>
+                      {req.status === "APPROVED" ? (
+                        <span className="office-pill office-pill-green">Approved</span>
+                      ) : req.status === "REJECTED" ? (
+                        <span className="office-pill office-pill-red">Rejected</span>
+                      ) : (
+                        <span className="office-pill office-pill-amber">Pending</span>
+                      )}
+                    </td>
+                    <td style={{ textAlign: "right" }}>
+                      {isPending ? (
+                        <div style={{ display: "flex", gap: "6px", justifyContent: "flex-end" }}>
                           <button
-                            className="btn btn-sm btn-ghost"
-                            onClick={() => openReviewModal(req, req.status === "APPROVED" ? "REJECTED" : "APPROVED")}
-                            style={{ fontSize: "11.5px" }}
+                            onClick={() => openReviewModal(req, "APPROVED")}
+                            className="office-btn office-btn-success office-btn-sm"
                           >
-                            Change Status
+                            <Check size={12} />
+                            <span>Approve</span>
                           </button>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+                          <button
+                            onClick={() => openReviewModal(req, "REJECTED")}
+                            className="office-btn office-btn-danger office-btn-sm"
+                          >
+                            <X size={12} />
+                            <span>Reject</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <span style={{ fontSize: "12px", color: "#94a3b8" }}>Processed</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
 
-      {/* ─── Approve/Reject Modal ─── */}
+      {/* Review Modal */}
       {targetRequest && (
         <div
           style={{
             position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: "rgba(0,0,0,0.65)",
+            inset: 0,
+            background: "rgba(15, 23, 42, 0.4)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            zIndex: 999,
+            zIndex: 1000,
             padding: "20px",
-            backdropFilter: "blur(4px)",
           }}
           onClick={() => setTargetRequest(null)}
         >
           <div
-            className="card"
-            style={{ maxWidth: "460px", width: "100%", padding: "24px" }}
+            className="office-card"
+            style={{ width: "100%", maxWidth: "440px", margin: 0 }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
-              <h3 className="card-title" style={{ margin: 0, fontSize: "16px" }}>
+            <div className="office-card-header">
+              <h3 className="office-card-title">
                 {actionType === "APPROVED" ? "Approve Leave Request" : "Reject Leave Request"}
               </h3>
-              <button className="btn-icon" onClick={() => setTargetRequest(null)}><X size={16} /></button>
-            </div>
-
-            <div style={{ padding: "12px", background: "var(--bg-surface)", borderRadius: "var(--radius-sm)", marginBottom: "16px", fontSize: "13px" }}>
-              <div><strong>Applicant:</strong> {targetRequest.user.teacherProfile?.fullName || targetRequest.user.email}</div>
-              <div style={{ marginTop: "4px" }}><strong>Type:</strong> {targetRequest.leaveType}</div>
-              <div style={{ marginTop: "4px" }}><strong>Dates:</strong> {formatDisplayDate(targetRequest.startDate)} — {formatDisplayDate(targetRequest.endDate)}</div>
-              <div style={{ marginTop: "4px", color: "var(--text-secondary)" }}><strong>Reason:</strong> {targetRequest.reason}</div>
+              <button
+                type="button"
+                onClick={() => setTargetRequest(null)}
+                className="office-btn office-btn-secondary office-btn-sm"
+                style={{ padding: "4px" }}
+              >
+                <X size={16} />
+              </button>
             </div>
 
             {error && (
-              <div className="alert alert-error" style={{ marginBottom: "14px" }}>
-                <AlertCircle size={15} /> <span>{error}</span>
+              <div style={{ color: "#dc2626", fontSize: "13px", marginBottom: "12px" }}>
+                {error}
               </div>
             )}
 
-            <form onSubmit={handleReviewSubmit} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-              <div className="form-group">
-                <label className="form-label">Decision</label>
-                <div style={{ display: "flex", gap: "12px" }}>
-                  <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", fontSize: "13px" }}>
-                    <input
-                      type="radio"
-                      name="decision"
-                      checked={actionType === "APPROVED"}
-                      onChange={() => setActionType("APPROVED")}
-                    />
-                    <span style={{ color: "#34d399", fontWeight: 600 }}>Approve</span>
-                  </label>
-                  <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", fontSize: "13px" }}>
-                    <input
-                      type="radio"
-                      name="decision"
-                      checked={actionType === "REJECTED"}
-                      onChange={() => setActionType("REJECTED")}
-                    />
-                    <span style={{ color: "#f87171", fontWeight: 600 }}>Reject</span>
-                  </label>
+            <form onSubmit={handleReviewSubmit}>
+              <div style={{ background: "#f8fafc", padding: "12px 14px", borderRadius: "8px", marginBottom: "16px", border: "1px solid #e2e8f0" }}>
+                <div style={{ fontWeight: 600, color: "#0f172a" }}>
+                  {targetRequest.user.teacherProfile?.fullName || targetRequest.user.email}
+                </div>
+                <div style={{ fontSize: "12.5px", color: "#64748b", marginTop: "2px" }}>
+                  {targetRequest.leaveType} • {formatDisplayDate(targetRequest.startDate)} to {formatDisplayDate(targetRequest.endDate)}
                 </div>
               </div>
 
-              <div className="form-group">
-                <label className="form-label">Admin Remark / Notes (optional)</label>
+              <div className="office-form-group">
+                <label className="office-form-label">Admin Remark / Feedback (Optional)</label>
                 <textarea
-                  className="form-input"
-                  rows={2}
-                  placeholder="e.g. Approved. Please ensure syllabus substitute is assigned."
+                  className="office-input"
+                  style={{ width: "100%", height: "70px", resize: "vertical" }}
+                  placeholder="e.g. Approved. Please coordinate class coverage with Mr. Verma."
                   value={adminRemark}
                   onChange={(e) => setAdminRemark(e.target.value)}
                 />
               </div>
 
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "8px" }}>
-                <button type="button" className="btn btn-secondary" onClick={() => setTargetRequest(null)} disabled={submitting}>
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "16px" }}>
+                <button
+                  type="button"
+                  onClick={() => setTargetRequest(null)}
+                  className="office-btn office-btn-secondary"
+                  disabled={submitting}
+                >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className={`btn ${actionType === "APPROVED" ? "btn-primary" : "btn-danger"}`}
                   disabled={submitting}
+                  className={`office-btn ${actionType === "APPROVED" ? "office-btn-success" : "office-btn-danger"}`}
                 >
-                  {submitting ? "Submitting..." : actionType === "APPROVED" ? "Confirm Approval" : "Confirm Rejection"}
+                  {submitting ? "Saving..." : actionType === "APPROVED" ? "Confirm Approval" : "Confirm Rejection"}
                 </button>
               </div>
             </form>

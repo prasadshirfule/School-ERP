@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getTenantDb, unauthorized, badRequest } from "@/lib/utils";
 import { TeacherCreateSchema } from "@/lib/validations";
 import bcrypt from "bcryptjs";
+import prisma from "@/lib/prisma";
 
 /**
  * GET /api/teachers
@@ -33,22 +34,25 @@ export async function GET(request: Request) {
     });
 
     const teachers = teacherUsers
-      .filter((u: any) => u.teacherProfile)
-      .map((u: any) => ({
-        id: u.teacherProfile.id,
-        userId: u.id,
-        fullName: u.teacherProfile.fullName,
-        email: u.email,
-        phone: u.phone,
-        isActive: u.isActive,
-        createdAt: u.createdAt,
-        sections: u.teacherProfile.sections.map((sec: any) => ({
-          id: sec.id,
-          name: sec.name,
-          className: sec.class.name,
-          academicYear: sec.academicYear,
-        })),
-      }));
+      .filter((u) => u.teacherProfile)
+      .map((u) => {
+        const profile = u.teacherProfile!;
+        return {
+          id: profile.id,
+          userId: u.id,
+          fullName: profile.fullName,
+          email: u.email,
+          phone: u.phone,
+          isActive: u.isActive,
+          createdAt: u.createdAt,
+          sections: profile.sections.map((sec) => ({
+            id: sec.id,
+            name: sec.name,
+            className: sec.class.name,
+            academicYear: sec.academicYear,
+          })),
+        };
+      });
 
     return NextResponse.json(teachers);
   }
@@ -61,10 +65,10 @@ export async function GET(request: Request) {
   });
 
   const teachers = teacherUsers
-    .filter((u: any) => u.teacherProfile)
-    .map((u: any) => ({
-      id: u.teacherProfile.id,
-      fullName: u.teacherProfile.fullName,
+    .filter((u) => u.teacherProfile)
+    .map((u) => ({
+      id: u.teacherProfile!.id,
+      fullName: u.teacherProfile!.fullName,
       userId: u.id,
     }));
 
@@ -91,7 +95,6 @@ export async function POST(request: Request) {
 
   const { fullName, email, phone, password } = parsed.data;
   const normalizedEmail = email.trim().toLowerCase();
-  const schoolId = ctx.session.user.schoolId;
 
   // Check if user with this email already exists
   const existingUser = await ctx.db.user.findFirst({
@@ -104,8 +107,7 @@ export async function POST(request: Request) {
   const passwordHash = await bcrypt.hash(password, 10);
 
   try {
-    const db = ctx.db;
-    const result = await (db as any).$transaction(async (tx: any) => {
+    const result = await prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
         data: {
           email: normalizedEmail,
@@ -113,6 +115,7 @@ export async function POST(request: Request) {
           passwordHash,
           role: "TEACHER",
           isActive: true,
+          schoolId: ctx.session.user.schoolId,
         },
       });
 
@@ -140,11 +143,12 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json(result, { status: 201 });
-  } catch (e: any) {
-    if (e.code === "P2002") {
+  } catch (e: unknown) {
+    const err = e as { code?: string; message?: string };
+    if (err?.code === "P2002") {
       return badRequest("A user with this email already exists");
     }
-    return badRequest(e.message || "Failed to create teacher account");
+    return badRequest(err?.message || "Failed to create teacher account");
   }
 }
 
@@ -178,8 +182,7 @@ export async function PATCH(request: Request) {
   }
 
   try {
-    const db = ctx.db;
-    const result = await (db as any).$transaction(async (tx: any) => {
+    const result = await prisma.$transaction(async (tx) => {
       if (fullName) {
         await tx.teacher.update({
           where: { id: teacherId },
@@ -187,7 +190,7 @@ export async function PATCH(request: Request) {
         });
       }
 
-      const userUpdateData: any = {};
+      const userUpdateData: { isActive?: boolean; phone?: string | null } = {};
       if (typeof isActive === "boolean") {
         userUpdateData.isActive = isActive;
       }
@@ -217,7 +220,7 @@ export async function PATCH(request: Request) {
         email: updated!.user.email,
         phone: updated!.user.phone,
         isActive: updated!.user.isActive,
-        sections: updated!.sections.map((sec: any) => ({
+        sections: updated!.sections.map((sec) => ({
           id: sec.id,
           name: sec.name,
           className: sec.class.name,
@@ -227,7 +230,8 @@ export async function PATCH(request: Request) {
     });
 
     return NextResponse.json(result);
-  } catch (e: any) {
-    return badRequest(e.message || "Failed to update teacher");
+  } catch (e: unknown) {
+    const err = e as { message?: string };
+    return badRequest(err?.message || "Failed to update teacher");
   }
 }

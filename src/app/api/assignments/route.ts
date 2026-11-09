@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { getTenantDb, unauthorized, badRequest } from "@/lib/utils";
 
 /**
@@ -14,7 +15,7 @@ export async function GET(request: Request) {
   const sectionId = searchParams.get("sectionId") || "";
   const subjectId = searchParams.get("subjectId") || "";
 
-  const whereClause: any = {};
+  const whereClause: Prisma.AssignmentWhereInput = {};
   if (sectionId) whereClause.sectionId = sectionId;
   if (subjectId) whereClause.subjectId = subjectId;
 
@@ -111,7 +112,7 @@ export async function POST(request: Request) {
       description,
       dueDate,
       attachmentUrl,
-    } as any,
+    },
     include: {
       section: {
         select: {
@@ -151,7 +152,7 @@ export async function PATCH(request: Request) {
   const existing = await ctx.db.assignment.findUnique({ where: { id } });
   if (!existing) return badRequest("Assignment not found");
 
-  const updateData: any = {};
+  const updateData: Prisma.AssignmentUpdateInput = {};
   if (typeof body.title === "string" && body.title.trim()) {
     updateData.title = body.title.trim();
   }

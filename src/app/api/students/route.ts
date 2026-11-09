@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import prisma from "@/lib/prisma";
 import { getTenantDb, unauthorized, badRequest } from "@/lib/utils";
 import { Prisma } from "@prisma/client";
 import { calculateInvoiceStatus } from "@/lib/invoiceStatus";
@@ -11,8 +12,16 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url);
   const sectionId = searchParams.get("sectionId");
+  const status = searchParams.get("status");
 
-  const where: any = { isActive: true };
+  const where: Prisma.StudentWhereInput = {};
+  if (status === "archived") {
+    where.isActive = false;
+  } else if (status === "all") {
+    // include both active and archived
+  } else {
+    where.isActive = true;
+  }
   if (sectionId === "unassigned") {
     where.sectionId = null;
   } else if (sectionId) {
@@ -73,6 +82,7 @@ export async function POST(request: Request) {
     medicalConditions,
     photoUrl,
     classDesignation,
+    parentEmail,
     // Fee details
     totalFees,
     amountPaidNow,
@@ -81,18 +91,19 @@ export async function POST(request: Request) {
   } = parsed.data;
 
   const schoolId = ctx.session.user.schoolId;
+  if (!schoolId) return badRequest("School ID missing from session");
   const currentYear = new Date().getFullYear();
   const yearStr = academicYear?.trim() || `${currentYear}-${(currentYear + 1).toString().slice(2)}`;
   const normalizedFullName = fullName.trim().toUpperCase();
 
   try {
-    const db = ctx.db;
-    const result = await (db as any).$transaction(async (tx: any) => {
+    const result = await prisma.$transaction(async (tx) => {
       // Auto-generate admission number: AY-{currentYear}-{4-digit sequential number}
       const prefix = `AY-${currentYear}-`;
 
       const existingStudents = await tx.student.findMany({
         where: {
+          schoolId,
           admissionNo: { startsWith: prefix },
         },
         select: { admissionNo: true },
@@ -113,6 +124,7 @@ export async function POST(request: Request) {
       // Create student record with encrypted sensitive PII
       const student = await tx.student.create({
         data: {
+          schoolId,
           admissionNo,
           rollNumber: rollNumber?.trim() || null,
           fullName: normalizedFullName,
@@ -121,6 +133,7 @@ export async function POST(request: Request) {
           academicYear: yearStr,
           photoUrl: photoUrl?.trim() || null,
           classDesignation: classDesignation?.trim() || null,
+          parentEmail: parentEmail?.trim().toLowerCase() || null,
           gender: gender?.trim() || null,
           bloodGroup: bloodGroup?.trim() || null,
           aadharNumber: aadharNumber ? encryptPII(aadharNumber.trim()) : null,
@@ -148,6 +161,41 @@ export async function POST(request: Request) {
         },
       });
 
+      // Automatically link or create Parent record if parent email was provided
+      if (parentEmail && parentEmail.trim()) {
+        const normalizedParentEmail = parentEmail.trim().toLowerCase();
+        let parentRecord = await tx.parent.findFirst({
+          where: { schoolId, email: normalizedParentEmail },
+        });
+
+        if (!parentRecord) {
+          // If a User with this email already exists, link them directly
+          const existingParentUser = await tx.user.findFirst({
+            where: { schoolId, email: normalizedParentEmail },
+          });
+
+          parentRecord = await tx.parent.create({
+            data: {
+              schoolId,
+              fullName: fatherName?.trim() || motherName?.trim() || guardianName?.trim() || "Parent / Guardian",
+              email: normalizedParentEmail,
+              phone: fatherPhone?.trim() || motherPhone?.trim() || guardianPhone?.trim() || "N/A",
+              userId: existingParentUser ? existingParentUser.id : null,
+            },
+          });
+        }
+
+        // Link student and parent
+        await tx.studentParent.create({
+          data: {
+            studentId: student.id,
+            parentId: parentRecord.id,
+            relationship: guardianRelation?.trim() || (fatherName ? "Father" : motherName ? "Mother" : "Guardian"),
+            isPrimary: true,
+          },
+        });
+      }
+
       // Handle admission FeeInvoice and initial Payment if totalFees provided
       if (totalFees && Number(totalFees) > 0) {
         const totalFeesNum = Number(totalFees);
@@ -166,6 +214,7 @@ export async function POST(request: Request) {
         // Find or create generic FeeStructure for Admission Fee in this academic year
         let feeStructure = await tx.feeStructure.findFirst({
           where: {
+            schoolId,
             name: `Admission Fee - ${yearStr}`,
             academicYear: yearStr,
           },
@@ -174,6 +223,7 @@ export async function POST(request: Request) {
         if (!feeStructure) {
           feeStructure = await tx.feeStructure.create({
             data: {
+              schoolId,
               name: `Admission Fee - ${yearStr}`,
               academicYear: yearStr,
               amount: dueDecimal,
@@ -191,6 +241,7 @@ export async function POST(request: Request) {
 
         const invoice = await tx.feeInvoice.create({
           data: {
+            schoolId,
             studentId: student.id,
             feeStructureId: feeStructure.id,
             amountDue: dueDecimal,
@@ -204,6 +255,7 @@ export async function POST(request: Request) {
           const recPrefix = `REC-${currentYear}-`;
           const existingPayments = await tx.payment.findMany({
             where: {
+              invoice: { schoolId },
               receiptNumber: { startsWith: recPrefix },
             },
             select: { receiptNumber: true },
@@ -222,6 +274,7 @@ export async function POST(request: Request) {
 
           await tx.payment.create({
             data: {
+              schoolId,
               invoiceId: invoice.id,
               amount: paidDecimal,
               method: paymentMethod || "CASH",
@@ -236,11 +289,12 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json(result, { status: 201 });
-  } catch (e: any) {
-    if (e.code === "P2002") {
+  } catch (e: unknown) {
+    if (typeof e === "object" && e && "code" in e && e.code === "P2002") {
       return badRequest("A student with this admission number already exists in this school");
     }
-    return badRequest(e.message || "Failed to create student");
+    const message = e instanceof Error ? e.message : String(e);
+    return badRequest(message || "Failed to create student");
   }
 }
 

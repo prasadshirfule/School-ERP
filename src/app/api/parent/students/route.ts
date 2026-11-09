@@ -1,52 +1,111 @@
 import { NextResponse } from "next/server";
-import { getTenantDb, unauthorized } from "@/lib/utils";
-import { Prisma } from "@prisma/client";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { unauthorized } from "@/lib/utils";
+import prisma from "@/lib/prisma";
 
-type ParentStudentItem = Prisma.StudentParentGetPayload<{
-  include: {
-    student: {
-      include: {
-        section: { include: { class: true } };
-      };
-    };
-  };
-}>;
-
-/** GET: returns students linked to the current parent user */
+/**
+ * GET: Returns all students linked to the current parent user.
+ * Supports multi-school parents:
+ * - Gathers children across all schools where the parent has a verified Parent profile.
+ * - Displays each child's school name and affiliation.
+ * - Only includes active, verified relationships.
+ * - Filters out any suspended or inactive schools.
+ */
 export async function GET() {
-  const ctx = await getTenantDb();
-  if (!ctx) return unauthorized();
+  const session = await getServerSession(authOptions);
+  if (!session?.user || session.user.role !== "PARENT") {
+    return unauthorized();
+  }
 
-  // Find the parent profile for this user
-  const parent = await ctx.db.parent.findUnique({
-    where: { userId: ctx.session.user.id },
-    include: {
-      students: {
-        include: {
-          student: {
-            include: {
-              section: { include: { class: true } },
+  try {
+    // Query all parent profiles linked to this authenticated user across all schools
+    const parentProfiles = await prisma.parent.findMany({
+      where: { userId: session.user.id },
+      include: {
+        school: {
+          select: {
+            id: true,
+            name: true,
+            isActive: true,
+            status: true,
+          },
+        },
+        students: {
+          include: {
+            student: {
+              include: {
+                section: {
+                  include: { class: true },
+                },
+              },
             },
           },
         },
       },
-    },
-  });
+    });
 
-  if (!parent) {
-    return NextResponse.json([]);
+    if (!parentProfiles || parentProfiles.length === 0) {
+      return NextResponse.json([]);
+    }
+
+    // Filter out inactive or suspended schools
+    const activeProfiles = parentProfiles.filter(
+      (p) => p.school && p.school.isActive && p.school.status !== "SUSPENDED"
+    );
+
+    type ParentStudentItem = {
+      id: string;
+      fullName: string;
+      admissionNo: string;
+      academicYear: string;
+      photoUrl: string | null;
+      relationship: string;
+      isPrimary: boolean;
+      schoolId: string;
+      schoolName: string;
+      section: {
+        id: string;
+        name: string;
+        class: {
+          id: string;
+          name: string;
+        };
+      } | null;
+    };
+
+    const studentsList: ParentStudentItem[] = [];
+    for (const profile of activeProfiles) {
+      for (const sp of profile.students) {
+        if (sp.student && sp.student.isActive) {
+          studentsList.push({
+            id: sp.student.id,
+            fullName: sp.student.fullName,
+            admissionNo: sp.student.admissionNo,
+            academicYear: sp.student.academicYear,
+            photoUrl: sp.student.photoUrl,
+            relationship: sp.relationship,
+            isPrimary: sp.isPrimary,
+            schoolId: profile.school.id,
+            schoolName: profile.school.name,
+            section: sp.student.section
+              ? {
+                  id: sp.student.section.id,
+                  name: sp.student.section.name,
+                  class: {
+                    id: sp.student.section.class.id,
+                    name: sp.student.section.class.name,
+                  },
+                }
+              : null,
+          });
+        }
+      }
+    }
+
+    return NextResponse.json(studentsList);
+  } catch (error: unknown) {
+    console.error("[PARENT_STUDENTS] Error fetching linked students:", error);
+    return NextResponse.json({ error: "Failed to load linked students" }, { status: 500 });
   }
-
-  // Verify parent belongs to the same school
-  if (parent.schoolId !== ctx.session.user.schoolId) {
-    return NextResponse.json([]);
-  }
-
-  const students = (parent.students as ParentStudentItem[]).map((sp: ParentStudentItem) => ({
-    ...sp.student,
-    relationship: sp.relationship,
-    isPrimary: sp.isPrimary,
-  }));
-
-  return NextResponse.json(students);
 }

@@ -11,6 +11,11 @@ import {
   CalendarClock,
   ClipboardList,
   Sparkles,
+  Calendar,
+  Users,
+  ChevronRight,
+  ArrowRight,
+  School,
 } from "lucide-react";
 
 type StudentData = {
@@ -19,6 +24,8 @@ type StudentData = {
   admissionNo: string;
   academicYear: string;
   relationship: string;
+  schoolId?: string;
+  schoolName?: string;
   section?: { name: string; class: { name: string } } | null;
 };
 
@@ -38,151 +45,337 @@ export default function ParentDashboard() {
       .catch(() => setLoading(false));
   }, []);
 
-  if (loading) {
-    return (
-      <div className="loading">
-        <Sparkles size={18} className="animate-spin" />
-        <span>Loading student profiles...</span>
-      </div>
-    );
-  }
-
   return (
-    <div>
-      {/* Breadcrumb Navigation */}
-      <div className="breadcrumbs">
-        <span>Family Portal</span>
-        <span className="breadcrumb-separator">/</span>
-        <span className="breadcrumb-current">Parent Dashboard</span>
-      </div>
-
-      <div className="page-header">
+    <div className="office-page-container">
+      {/* ─── Office Welcome Hero ─── */}
+      <div className="welcome-hero-simple">
         <div>
-          <h1 className="page-title">Parent Workspace</h1>
-          <p className="page-subtitle">
-            Track your children&apos;s daily attendance records, exam report cards, fee dues, and homework.
+          <h1 className="welcome-hero-title">Welcome to Family Portal</h1>
+          <p className="welcome-hero-sub">
+            Track your children&apos;s daily attendance records, exam report cards, homework, and fee payments
           </p>
         </div>
+        <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", background: "#ffffff", padding: "6px 14px", borderRadius: "9999px", border: "1px solid #bfdbfe", fontSize: "12.5px", color: "#1e3a8a", fontWeight: 600 }}>
+          <Calendar size={13} />
+          <span>Academic Session 2026-27</span>
+        </div>
       </div>
 
-      {students.length === 0 ? (
-        <div className="card">
-          <div className="empty-state">
-            <div className="empty-state-icon-wrap">
-              <HeartHandshake size={26} color="var(--primary)" />
+      {/* ─── 4 Primary Action Cards ─── */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+          gap: "16px",
+          marginBottom: "28px",
+        }}
+      >
+        <Link
+          href="/parent/attendance"
+          style={{
+            background: "#ffffff",
+            border: "1px solid #e2e8f0",
+            borderRadius: "12px",
+            padding: "20px",
+            display: "flex",
+            alignItems: "center",
+            gap: "16px",
+            textDecoration: "none",
+            boxShadow: "0 1px 3px rgba(15,23,42,0.04)",
+            transition: "all 0.15s ease",
+          }}
+        >
+          <div
+            style={{
+              width: "48px",
+              height: "48px",
+              borderRadius: "10px",
+              background: "#ecfdf5",
+              color: "#059669",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            <CheckCircle2 size={24} />
+          </div>
+          <div>
+            <div style={{ fontSize: "15px", fontWeight: 700, color: "#0f172a" }}>Daily Attendance</div>
+            <div style={{ fontSize: "12px", color: "#64748b", marginTop: "2px" }}>
+              Monthly calendar & presence records
             </div>
-            <div className="empty-state-title">No children linked to your account</div>
-            <p className="empty-state-text">
-              No student profiles are currently linked to this email address. Please reach out to your school administrative office for linkage.
-            </p>
+          </div>
+        </Link>
+
+        <Link
+          href="/parent/report-cards"
+          style={{
+            background: "#ffffff",
+            border: "1px solid #e2e8f0",
+            borderRadius: "12px",
+            padding: "20px",
+            display: "flex",
+            alignItems: "center",
+            gap: "16px",
+            textDecoration: "none",
+            boxShadow: "0 1px 3px rgba(15,23,42,0.04)",
+            transition: "all 0.15s ease",
+          }}
+        >
+          <div
+            style={{
+              width: "48px",
+              height: "48px",
+              borderRadius: "10px",
+              background: "#eff6ff",
+              color: "#1e3a8a",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            <Award size={24} />
+          </div>
+          <div>
+            <div style={{ fontSize: "15px", fontWeight: 700, color: "#0f172a" }}>Report Cards & Marks</div>
+            <div style={{ fontSize: "12px", color: "#64748b", marginTop: "2px" }}>
+              Exam scores & printable report cards
+            </div>
+          </div>
+        </Link>
+
+        <Link
+          href="/parent/fees"
+          style={{
+            background: "#ffffff",
+            border: "1px solid #e2e8f0",
+            borderRadius: "12px",
+            padding: "20px",
+            display: "flex",
+            alignItems: "center",
+            gap: "16px",
+            textDecoration: "none",
+            boxShadow: "0 1px 3px rgba(15,23,42,0.04)",
+            transition: "all 0.15s ease",
+          }}
+        >
+          <div
+            style={{
+              width: "48px",
+              height: "48px",
+              borderRadius: "10px",
+              background: "#fffbeb",
+              color: "#d97706",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            <Receipt size={24} />
+          </div>
+          <div>
+            <div style={{ fontSize: "15px", fontWeight: 700, color: "#0f172a" }}>Pay School Fees</div>
+            <div style={{ fontSize: "12px", color: "#64748b", marginTop: "2px" }}>
+              Pending dues & receipt downloads
+            </div>
+          </div>
+        </Link>
+
+        <Link
+          href="/parent/assignments"
+          style={{
+            background: "#ffffff",
+            border: "1px solid #e2e8f0",
+            borderRadius: "12px",
+            padding: "20px",
+            display: "flex",
+            alignItems: "center",
+            gap: "16px",
+            textDecoration: "none",
+            boxShadow: "0 1px 3px rgba(15,23,42,0.04)",
+            transition: "all 0.15s ease",
+          }}
+        >
+          <div
+            style={{
+              width: "48px",
+              height: "48px",
+              borderRadius: "10px",
+              background: "#f8fafc",
+              color: "#475569",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            <ClipboardList size={24} />
+          </div>
+          <div>
+            <div style={{ fontSize: "15px", fontWeight: 700, color: "#0f172a" }}>Homework & Notes</div>
+            <div style={{ fontSize: "12px", color: "#64748b", marginTop: "2px" }}>
+              Teacher assignments & timetable
+            </div>
+          </div>
+        </Link>
+      </div>
+
+      {/* ─── Enrolled Children Cards ─── */}
+      <div className="office-card">
+        <div className="office-card-header">
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <GraduationCap size={20} color="#1e3a8a" />
+            <h3 className="office-card-title">Enrolled Children ({students.length})</h3>
           </div>
         </div>
-      ) : (
-        <>
-          <div className="stats-grid">
+
+        {loading ? (
+          <div style={{ padding: "40px 20px", textAlign: "center" }}>
+            <Sparkles size={20} className="animate-spin" color="#1e3a8a" style={{ margin: "0 auto 8px" }} />
+            <span style={{ fontSize: "13.5px", color: "#64748b" }}>Loading linked child profiles...</span>
+          </div>
+        ) : students.length === 0 ? (
+          <div style={{ padding: "40px 20px", textAlign: "center", color: "#64748b" }}>
+            <HeartHandshake size={32} color="#94a3b8" style={{ margin: "0 auto 8px" }} />
+            <div style={{ fontWeight: 600, color: "#0f172a" }}>No student profiles linked yet</div>
+            <p style={{ fontSize: "13px", margin: "4px 0 0" }}>
+              Please contact the school office to link your children&apos;s admission records to your email.
+            </p>
+          </div>
+        ) : (
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+              gap: "16px",
+            }}
+          >
             {students.map((s) => (
               <div
                 key={s.id}
-                className="card"
                 style={{
+                  background: "#ffffff",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: "10px",
+                  padding: "18px",
                   display: "flex",
                   flexDirection: "column",
                   justifyContent: "space-between",
-                  gap: "14px",
+                  gap: "16px",
                 }}
               >
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                    <div className="stat-icon-wrap stat-icon-coral">
-                      <GraduationCap size={22} />
+                  <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                    <div
+                      style={{
+                        width: "44px",
+                        height: "44px",
+                        borderRadius: "50%",
+                        background: "#eff6ff",
+                        color: "#1e3a8a",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontWeight: 700,
+                        fontSize: "16px",
+                        flexShrink: 0,
+                      }}
+                    >
+                      {s.fullName.charAt(0)}
                     </div>
                     <div>
-                      <div style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary)" }}>
+                      <div style={{ fontSize: "16px", fontWeight: 700, color: "#0f172a" }}>
                         {s.fullName}
                       </div>
-                      <div style={{ fontSize: "12px", color: "var(--text-muted)" }}>
-                        {s.admissionNo} • Session {s.academicYear}
+                      <div style={{ fontSize: "12px", color: "#64748b", marginTop: "2px" }}>
+                        Adm. No: <span style={{ fontFamily: "monospace", fontWeight: 600 }}>{s.admissionNo}</span>
                       </div>
+                      {s.schoolName && (
+                        <div
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "5px",
+                            fontSize: "11.5px",
+                            fontWeight: 600,
+                            color: "var(--brand-primary)",
+                            backgroundColor: "#eff6ff",
+                            padding: "2px 8px",
+                            borderRadius: "6px",
+                            marginTop: "5px",
+                          }}
+                        >
+                          <School size={12} />
+                          <span>{s.schoolName}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
-                  <span className="badge badge-teal">
-                    <span className="badge-dot" />
-                    <span>{s.relationship}</span>
+                  <span className="office-pill office-pill-blue">
+                    {s.relationship || "Student"}
                   </span>
                 </div>
 
                 <div
                   style={{
-                    padding: "8px 12px",
-                    borderRadius: "var(--radius-sm)",
-                    background: "var(--bg-muted)",
+                    background: "#f8fafc",
+                    padding: "10px 14px",
+                    borderRadius: "8px",
                     fontSize: "13px",
-                    fontWeight: 600,
-                    color: "var(--text-secondary)",
+                    color: "#334155",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
                   }}
                 >
-                  Class: {s.section ? `${s.section.class.name} — Section ${s.section.name}` : "Unassigned"}
+                  <span style={{ color: "#64748b" }}>Class & Section:</span>
+                  <strong style={{ color: "#0f172a" }}>
+                    {s.section ? `${s.section.class.name} — Section ${s.section.name}` : "Unassigned"}
+                  </strong>
                 </div>
 
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "8px", paddingTop: "6px" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
                   <Link
-                    href={`/parent/students/${s.id}`}
-                    className="btn btn-secondary btn-sm"
+                    href={`/parent/attendance?studentId=${s.id}`}
+                    className="office-btn office-btn-secondary office-btn-sm"
                     style={{ justifyContent: "center" }}
                   >
-                    <span>Full Profile</span>
-                  </Link>
-                  <Link
-                    href="/parent/attendance"
-                    className="btn btn-secondary btn-sm"
-                    style={{ justifyContent: "center" }}
-                  >
-                    <CheckCircle2 size={13} color="var(--role-teacher)" />
+                    <CheckCircle2 size={13} color="#059669" />
                     <span>Attendance</span>
                   </Link>
                   <Link
-                    href="/parent/fees"
-                    className="btn btn-secondary btn-sm"
+                    href={`/parent/report-cards?studentId=${s.id}`}
+                    className="office-btn office-btn-secondary office-btn-sm"
                     style={{ justifyContent: "center" }}
                   >
-                    <Receipt size={13} color="var(--role-accountant)" />
+                    <Award size={13} color="#1e3a8a" />
+                    <span>Report Card</span>
+                  </Link>
+                  <Link
+                    href={`/parent/fees?studentId=${s.id}`}
+                    className="office-btn office-btn-secondary office-btn-sm"
+                    style={{ justifyContent: "center" }}
+                  >
+                    <Receipt size={13} color="#d97706" />
                     <span>Fees & Dues</span>
                   </Link>
                   <Link
-                    href="/parent/report-cards"
-                    className="btn btn-secondary btn-sm"
+                    href={`/parent/students/${s.id}`}
+                    className="office-btn office-btn-secondary office-btn-sm"
                     style={{ justifyContent: "center" }}
                   >
-                    <Award size={13} color="var(--primary)" />
-                    <span>Report Cards</span>
+                    <span>Full Profile</span>
+                    <ArrowRight size={13} />
                   </Link>
                 </div>
               </div>
             ))}
           </div>
-
-          {/* Quick Shortcuts */}
-          <div className="card" style={{ marginTop: "12px" }}>
-            <div className="card-header">
-              <h3 className="card-title">School Services & Academic Schedule</h3>
-            </div>
-            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-              <Link href="/parent/timetable" className="btn btn-secondary">
-                <CalendarClock size={15} />
-                <span>Class Timetable</span>
-              </Link>
-              <Link href="/parent/assignments" className="btn btn-secondary">
-                <ClipboardList size={15} />
-                <span>Homework & Assignments</span>
-              </Link>
-              <Link href="/parent/notices" className="btn btn-secondary">
-                <Sparkles size={15} />
-                <span>School Circulars</span>
-              </Link>
-            </div>
-          </div>
-        </>
-      )}
+        )}
+      </div>
     </div>
   );
 }

@@ -41,7 +41,7 @@ export async function POST(request: Request) {
   }
 
   // Find target students
-  const studentWhere: any = { isActive: true };
+  const studentWhere: Prisma.StudentWhereInput = { isActive: true };
   if (sectionId) {
     studentWhere.sectionId = sectionId;
   } else if (classId) {
@@ -83,7 +83,8 @@ export async function POST(request: Request) {
     return badRequest("All students in this section already have an invoice for this fee structure");
   }
 
-  const invoicesData = eligibleStudents.map((s: StudentRecord) => ({
+  const invoicesData: Prisma.FeeInvoiceCreateManyInput[] = eligibleStudents.map((s: StudentRecord) => ({
+    schoolId: ctx.session.user.schoolId,
     studentId: s.id,
     feeStructureId,
     amountDue,
@@ -92,11 +93,8 @@ export async function POST(request: Request) {
     status: "UNPAID" as const,
   }));
 
-  const db = ctx.db;
-  const result = await (db as any).$transaction(async (tx: any) => {
-    return tx.feeInvoice.createMany({
-      data: invoicesData,
-    });
+  const result = await ctx.db.feeInvoice.createMany({
+    data: invoicesData,
   });
 
   return NextResponse.json(

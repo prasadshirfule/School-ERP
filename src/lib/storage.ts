@@ -1,5 +1,58 @@
 import fs from "fs";
 import path from "path";
+import crypto from "crypto";
+
+export interface SignedFilePayload {
+  path: string;
+  expires: number;
+}
+
+/**
+ * Generates an HMAC-SHA256 signed access token for secure time-limited document download
+ */
+export function generateSignedFileToken(filePath: string, expiresInSeconds: number = 3600): string {
+  const secret = process.env.STORAGE_SIGNING_SECRET || process.env.NEXTAUTH_SECRET || "erp-default-file-signing-key";
+  const expires = Math.floor(Date.now() / 1000) + expiresInSeconds;
+  const payloadStr = Buffer.from(JSON.stringify({ path: filePath, expires })).toString("base64url");
+  const signature = crypto.createHmac("sha256", secret).update(payloadStr).digest("hex");
+  return `${payloadStr}.${signature}`;
+}
+
+/**
+ * Verifies an HMAC-SHA256 signed document token
+ */
+export function verifySignedFileToken(token: string): { valid: boolean; path?: string; expired?: boolean } {
+  try {
+    const parts = token.split(".");
+    if (parts.length !== 2) return { valid: false };
+    const [payloadStr, signature] = parts;
+    const secret = process.env.STORAGE_SIGNING_SECRET || process.env.NEXTAUTH_SECRET || "erp-default-file-signing-key";
+    const expectedSig = crypto.createHmac("sha256", secret).update(payloadStr).digest("hex");
+
+    const sigBuf = Buffer.from(signature, "hex");
+    const expBuf = Buffer.from(expectedSig, "hex");
+    if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
+      return { valid: false };
+    }
+
+    const payload: SignedFilePayload = JSON.parse(Buffer.from(payloadStr, "base64url").toString("utf8"));
+    const now = Math.floor(Date.now() / 1000);
+    if (payload.expires < now) {
+      return { valid: false, expired: true, path: payload.path };
+    }
+    return { valid: true, path: payload.path };
+  } catch {
+    return { valid: false };
+  }
+}
+
+/**
+ * Returns a signed download URL using token verification
+ */
+export function generateSignedFileUrl(filePath: string, expiresInSeconds: number = 3600): string {
+  const token = generateSignedFileToken(filePath, expiresInSeconds);
+  return `/api/documents/download?token=${token}`;
+}
 
 export interface UploadOptions {
   buffer: Buffer;
@@ -13,6 +66,7 @@ export interface StorageDriver {
   upload(options: UploadOptions): Promise<{ url: string; path: string }>;
   delete(filePath: string): Promise<boolean>;
   getPublicUrl(filePath: string): string;
+  getPresignedDownloadUrl(filePath: string, expiresInSeconds?: number): Promise<string>;
 }
 
 /**
@@ -128,6 +182,10 @@ class LocalStorageDriver implements StorageDriver {
       return filePath;
     }
     return `/uploads/${filePath.replace(/^\/+/, "")}`;
+  }
+
+  async getPresignedDownloadUrl(filePath: string, expiresInSeconds: number = 3600): Promise<string> {
+    return generateSignedFileUrl(filePath, expiresInSeconds);
   }
 }
 
@@ -270,6 +328,28 @@ class S3StorageDriver implements StorageDriver {
 
     return `https://${this.bucket}.s3.${this.region}.amazonaws.com/${cleanKey}`;
   }
+
+  async getPresignedDownloadUrl(filePath: string, expiresInSeconds: number = 3600): Promise<string> {
+    if (!this.bucket) {
+      return generateSignedFileUrl(filePath, expiresInSeconds);
+    }
+    try {
+      const { GetObjectCommand } = await import("@aws-sdk/client-s3");
+      const { getSignedUrl } = await import("@aws-sdk/s3-request-presigner");
+      const client = await this.getS3Client();
+      const objectKey = filePath.replace(/^https?:\/\/[^/]+\//, "").replace(/^\/+/, "");
+
+      const command = new GetObjectCommand({
+        Bucket: this.bucket,
+        Key: objectKey,
+      });
+
+      return await getSignedUrl(client, command, { expiresIn: expiresInSeconds });
+    } catch (err) {
+      console.error("[STORAGE_S3] Failed to generate presigned URL:", err);
+      return generateSignedFileUrl(filePath, expiresInSeconds);
+    }
+  }
 }
 
 /**
@@ -279,3 +359,11 @@ export const storage: StorageDriver =
   process.env.STORAGE_PROVIDER === "s3"
     ? new S3StorageDriver()
     : new LocalStorageDriver();
+
+/**
+ * Convenience helper to generate a secure time-limited download URL
+ * across local disk or S3/R2 cloud storage.
+ */
+export async function getSecureDownloadUrl(filePath: string, expiresInSeconds: number = 3600): Promise<string> {
+  return storage.getPresignedDownloadUrl(filePath, expiresInSeconds);
+}

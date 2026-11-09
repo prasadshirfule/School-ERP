@@ -49,7 +49,7 @@ export async function GET() {
     const amountDueNum = parseFloat(inv.amountDue.toString());
     const discountNum = parseFloat(inv.discountAmount.toString());
     const totalPaidNum = inv.payments.reduce(
-      (sum: number, p: any) => sum + parseFloat(p.amount.toString()),
+      (sum: number, p) => sum + parseFloat(p.amount.toString()),
       0
     );
     const remainingNum = Math.max(0, amountDueNum - totalPaidNum);
@@ -58,7 +58,7 @@ export async function GET() {
     if (remainingNum <= 0) continue;
 
     // Pick primary parent contact (isPrimary=true prioritized by orderBy, otherwise first linked parent)
-    const primaryParentLink = inv.student.parents.find((sp: any) => sp.isPrimary) || inv.student.parents[0];
+    const primaryParentLink = inv.student.parents.find((sp) => sp.isPrimary) || inv.student.parents[0];
     const primaryContact = primaryParentLink
       ? {
           name: primaryParentLink.parent.fullName,
