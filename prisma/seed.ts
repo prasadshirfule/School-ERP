@@ -12,7 +12,8 @@ import { PrismaClient, Role, SchoolStatus, Gender, StudentStatus, StudentAttenda
 const prisma = new PrismaClient();
 
 // Fictional dev password hash for test accounts (bcrypt hash of "VidyoraDevPass2026!")
-const DEV_PASSWORD_HASH = '$2a$10$wO3o00s35E2fE3ZlU.o57ecVfH/g33XkM8y8WJm59yT8XhJ26tKiy';
+// Synthetic BCrypt Hash (cost factor 12) for development password: "AdminPassword123!"
+const DEV_PASSWORD_HASH = '$2b$12$0FNanZwqNUX3aICXVw6Ghe4xYoPKUHoFtitEyEVhvna3TGcgC5HZq';
 
 async function main() {
   console.log('--- Vidyora Synthetic Development Seed ---');

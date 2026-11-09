@@ -15,6 +15,16 @@ export function generateSecureToken(byteLength = 32): string {
   return crypto.randomBytes(byteLength).toString("hex");
 }
 
+export function generateNumericOtp(digits = 6): string {
+  const min = Math.pow(10, digits - 1);
+  const max = Math.pow(10, digits) - 1;
+  return crypto.randomInt(min, max + 1).toString();
+}
+
+export function sha256Hash(input: string): string {
+  return crypto.createHash("sha256").update(input).digest("hex");
+}
+
 export function timingSafeEqual(a: string, b: string): boolean {
   const bufA = Buffer.from(a);
   const bufB = Buffer.from(b);

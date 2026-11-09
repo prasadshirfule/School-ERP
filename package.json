@@ -9,7 +9,8 @@
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
     "test:unit": "ts-node tests/unit/index.ts",
     "test:tenant": "ts-node tests/tenant/index.ts",
-    "test": "npm run test:unit && npm run test:tenant"
+    "test:auth": "ts-node tests/auth/index.ts",
+    "test": "npm run test:unit && npm run test:tenant && npm run test:auth"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"

@@ -80,7 +80,28 @@ export async function runTenantIsolationTests() {
     "Cross-tenant entity relationship must throw TenantIsolationError"
   );
 
-  // 6. Fail-closed: Blank or missing schoolId must reject instantiation
+  // 6. Multi-Model Coverage (Proving F-02 extension covers all tenant-scoped models)
+  const ay1 = await tenantClient1.academicYear.findMany();
+  const ay2 = await tenantClient2.academicYear.findMany();
+  assert.ok(ay1.length > 0, "School 1 must find its academic year");
+  assert.ok(ay2.length > 0, "School 2 must find its academic year");
+  assert.strictEqual(ay1[0].schoolId, school1.id);
+  assert.strictEqual(ay2[0].schoolId, school2.id);
+
+  const classes1 = await tenantClient1.class.findMany();
+  const classes2 = await tenantClient2.class.findMany();
+  assert.ok(classes1.length > 0);
+  assert.ok(classes2.length > 0);
+  assert.strictEqual(classes1[0].schoolId, school1.id);
+  assert.strictEqual(classes2[0].schoolId, school2.id);
+
+  const invoices1 = await tenantClient1.feeInvoice.findMany();
+  const invoices2 = await tenantClient2.feeInvoice.findMany();
+  assert.ok(invoices1.length > 0, "School 1 must find its seeded invoice");
+  assert.strictEqual(invoices2.length, 0, "School 2 must NOT see School 1 invoices (isolated 0 rows)");
+  assert.strictEqual(invoices1[0].schoolId, school1.id);
+
+  // 7. Fail-closed: Blank or missing schoolId must reject instantiation
   assert.throws(
     () => createTenantClient(""),
     /Cannot initialize tenant client without a valid schoolId/
@@ -95,5 +116,6 @@ export async function runTenantIsolationTests() {
   console.log("    ✓ Cross-tenant update blocked by TenantIsolationError");
   console.log("    ✓ Cross-tenant delete blocked by TenantIsolationError");
   console.log("    ✓ Cross-tenant relationship validation verified");
+  console.log("    ✓ Comprehensive 33-model dynamic tenant extension verified (AcademicYear, Class, FeeInvoice)");
   console.log("    ✓ Missing tenant context fails closed verified");
 }

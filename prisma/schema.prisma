@@ -125,6 +125,29 @@ enum GuardianRelationship {
   OTHER
 }
 
+enum RegistrationApplicationStatus {
+  PENDING
+  UNDER_REVIEW
+  DOCUMENTS_REQUESTED
+  APPROVED
+  REJECTED
+}
+
+enum VerificationPurpose {
+  EMAIL_VERIFICATION
+  MOBILE_OTP
+  PASSWORD_RESET
+  ADMIN_ACTIVATION
+  PARENT_INVITATION
+}
+
+enum GuardianVerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+  REVOKED
+}
+
 // ------------------------------------------------------------------------------
 // 1. CORE INSTITUTION & TENANT MODELS
 // ------------------------------------------------------------------------------
@@ -178,6 +201,7 @@ model School {
   admissionApplications AdmissionApplication[]
   studentDocuments      StudentDocument[]
   studentGuardians      StudentGuardian[]
+  registrationApplication SchoolRegistrationApplication?
 
   @@index([status])
   @@index([createdAt])
@@ -215,6 +239,8 @@ model User {
   phone          String?
   role           Role
   isActive       Boolean   @default(true)
+  suspendedAt    DateTime?
+  suspendedReason String?
   sessionVersion Int       @default(1) // Incremented for instant token revocation
   lastLoginAt    DateTime?
   createdAt      DateTime  @default(now())
@@ -231,17 +257,20 @@ model User {
 }
 
 model SchoolMembership {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   schoolId  String
-  school    School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  school    School    @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   role      Role
-  isPrimary Boolean  @default(true)
-  joinedAt  DateTime @default(now())
+  isPrimary Boolean   @default(true)
+  isActive  Boolean   @default(true)
+  revokedAt DateTime?
+  joinedAt  DateTime  @default(now())
 
   @@unique([schoolId, userId])
   @@index([schoolId, role])
+  @@index([schoolId, isActive])
   @@index([userId])
 }
 
@@ -526,14 +555,16 @@ model StudentGuardian {
   student            Student              @relation(fields: [studentId], references: [id], onDelete: Cascade)
   parentProfileId    String
   parentProfile      ParentProfile        @relation(fields: [parentProfileId], references: [id], onDelete: Cascade)
-  relationship       GuardianRelationship @default(FATHER)
-  isPrimary          Boolean              @default(false)
-  isAuthorizedPickup Boolean              @default(true)
-  createdAt          DateTime             @default(now())
+  relationship       GuardianRelationship       @default(FATHER)
+  verificationStatus GuardianVerificationStatus @default(VERIFIED)
+  isPrimary          Boolean                    @default(false)
+  isAuthorizedPickup Boolean                    @default(true)
+  createdAt          DateTime                   @default(now())
 
   @@unique([studentId, parentProfileId])
   @@index([schoolId, studentId])
   @@index([schoolId, parentProfileId])
+  @@index([schoolId, verificationStatus])
 }
 
 model StudentAttendance {
@@ -916,3 +947,69 @@ model SecurityEvent {
   @@index([schoolId, eventType])
   @@index([createdAt, severity])
 }
+
+// ------------------------------------------------------------------------------
+// 8. REGISTRATION, VERIFICATION TOKENS & SECURITY RATE LIMITING
+// ------------------------------------------------------------------------------
+
+model SchoolRegistrationApplication {
+  id                 String                        @id @default(cuid())
+  schoolName         String
+  schoolEmail        String                        @unique
+  contactMobile      String
+  address            String
+  city               String
+  state              String
+  pincode            String
+  boardType          String                        @default("CBSE")
+  affiliationNumber  String?
+  adminFullName      String
+  adminEmail         String                        @unique
+  adminMobile        String
+  adminPasswordHash  String
+  status             RegistrationApplicationStatus @default(PENDING)
+  emailVerifiedAt    DateTime?
+  mobileVerifiedAt   DateTime?
+  reviewedBy         String?
+  reviewNotes        String?
+  rejectionReason    String?
+  requestedDocuments String?
+  submittedDocuments Json?
+  createdSchoolId    String?                       @unique
+  createdSchool      School?                       @relation(fields: [createdSchoolId], references: [id], onDelete: SetNull)
+  createdAt          DateTime                      @default(now())
+  updatedAt          DateTime                      @updatedAt
+
+  @@index([status])
+  @@index([schoolEmail])
+  @@index([adminEmail])
+}
+
+model VerificationToken {
+  id          String              @id @default(cuid())
+  identifier  String              // email, mobile, or account reference
+  tokenHash   String              // SHA-256 hash of token or 6-digit OTP
+  purpose     VerificationPurpose
+  expiresAt   DateTime
+  attempts    Int                 @default(0)
+  maxAttempts Int                 @default(3)
+  resendAfter DateTime?
+  usedAt      DateTime?
+  metadata    Json?
+  createdAt   DateTime            @default(now())
+
+  @@index([identifier, purpose])
+  @@index([tokenHash])
+  @@index([expiresAt])
+}
+
+model RateLimitBucket {
+  key        String   @id // e.g. "login:ip:1.2.3.4", "otp:mobile:+919876543210"
+  count      Int      @default(1)
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([expiresAt])
+}
+
