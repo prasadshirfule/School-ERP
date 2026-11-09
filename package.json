@@ -1,18 +1,15 @@
 {
-  "name": "school-erp",
+  "name": "vidyora",
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "predev": "npm run check:tenant-scoping",
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build --webpack",
     "start": "next start",
-    "lint": "eslint",
-    "check:tenant-scoping": "ts-node scripts/check-tenant-scoping.ts",
-    "test:tenant": "ts-node scripts/test-tenant-isolation.ts",
-    "test:security": "ts-node scripts/test-security-suite.ts",
-    "test:auth": "ts-node scripts/test-auth-regression.ts",
-    "test": "npm run check:tenant-scoping && npm run test:tenant && npm run test:security && npm run test:auth"
+    "lint": "eslint \"src/**/*.{ts,tsx}\"",
+    "test:unit": "ts-node tests/unit/index.ts",
+    "test:tenant": "ts-node tests/tenant/index.ts",
+    "test": "npm run test:unit && npm run test:tenant"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"

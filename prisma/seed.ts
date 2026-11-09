@@ -1,998 +1,644 @@
-import { PrismaClient, Role, AttendanceStatus, InvoiceStatus } from "@prisma/client";
-import bcrypt from "bcryptjs";
+/**
+ * ==============================================================================
+ * VIDYORA — SYNTHETIC DEVELOPMENT SEED
+ * Product: Vidyora — Smarter Schools. Better Learning.
+ * Safety: Strictly development & staging only. Fully idempotent upserts.
+ * Zero real student, parent, or teacher personal information.
+ * ==============================================================================
+ */
+
+import { PrismaClient, Role, SchoolStatus, Gender, StudentStatus, StudentAttendanceStatus, FeeFrequency, InvoiceStatus, PaymentMethod, ExamLifecycleStatus, GuardianRelationship } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
+// Fictional dev password hash for test accounts (bcrypt hash of "VidyoraDevPass2026!")
+const DEV_PASSWORD_HASH = '$2a$10$wO3o00s35E2fE3ZlU.o57ecVfH/g33XkM8y8WJm59yT8XhJ26tKiy';
+
 async function main() {
-  if (process.env.NODE_ENV === "production") {
-    console.error("🚨 FATAL SAFETY BLOCK: Refusing to execute development seed script in PRODUCTION environment.");
-    console.error("Production databases must never be seeded with disposable demo records or default shared passwords.");
-    process.exit(1);
+  console.log('--- Vidyora Synthetic Development Seed ---');
+
+  // SAFETY CHECK 1: Production protection
+  if (process.env.NODE_ENV === 'production' && process.env.ALLOW_DEV_SEED !== 'true') {
+    throw new Error('FATAL: Development seed execution blocked in production environment.');
   }
 
-  const dbUrl = process.env.NEON_DATABASE_URL || process.env.DATABASE_URL || "";
-  const isHostedOrProdDb = /prod|neon\.tech|supabase|pooler|rds|vercel-storage/i.test(dbUrl);
-  if (isHostedOrProdDb && process.env.ALLOW_DESTRUCTIVE_SEED !== "true") {
-    console.error("🚨 FATAL SAFETY BLOCK: DATABASE_URL appears to target a hosted or production database.");
-    console.error("To prevent catastrophic data loss, destructive seeding is blocked.");
-    console.error("Set ALLOW_DESTRUCTIVE_SEED=true only on disposable development branches.");
-    process.exit(1);
+  // SAFETY CHECK 2: Database endpoint safety
+  const dbUrl = process.env.DATABASE_URL || '';
+  if (dbUrl.includes('ep-muddy-butterfly-a16q2j0p') || dbUrl.includes('plain-surf-10645492')) {
+    throw new Error('FATAL: Database URL matches old production School ERP! Aborting seed.');
   }
 
-  // Idempotency check: if data already exists and RESET_DB is not explicitly set, do not wipe tables
-  const existingSchoolCount = await prisma.school.count().catch(() => 0);
-  if (existingSchoolCount > 0 && process.env.RESET_DB !== "true" && process.env.ALLOW_DESTRUCTIVE_SEED !== "true") {
-    console.log(`ℹ️ Database already contains ${existingSchoolCount} school(s). Skipping seed to preserve existing records.`);
-    console.log("Run with RESET_DB=true if you intentionally want to wipe and re-seed local development data.");
-    return;
-  }
+  console.log('Environment safety checks passed.');
 
-  console.log("🌱 Starting development multi-tenant database seed (RESET_DB confirmed)...");
+  // ============================================================================
+  // SCHOOL 1: Aryabhata Vidyapeeth (CBSE Board)
+  // ============================================================================
+  console.log('Seeding School 1: Aryabhata Vidyapeeth...');
 
-  const passwordHash = await bcrypt.hash("password123", 10);
+  const school1 = await prisma.school.upsert({
+    where: { id: 'school-aryabhata-cbse' },
+    update: {},
+    create: {
+      id: 'school-aryabhata-cbse',
+      name: 'Aryabhata Vidyapeeth',
+      boardType: 'CBSE',
+      address: 'Plot 42, Knowledge Park, Pune, Maharashtra 411001',
+      phone: '+91 20 2555 0101',
+      email: 'admin@aryabhatavidyapeeth.edu.in',
+      website: 'https://aryabhata.vidyora.internal',
+      principalName: 'Dr. Meera Kulkarni',
+      affiliationNumber: 'CBSE-AFF-2026-4401',
+      trustName: 'Aryabhata Educational Foundation',
+      establishedYear: 2008,
+      status: SchoolStatus.ACTIVE,
+    },
+  });
 
-  // Clean existing records in reverse dependency order
-  await prisma.payment.deleteMany();
-  await prisma.feeInvoice.deleteMany();
-  await prisma.feeStructure.deleteMany();
-  await prisma.attendance.deleteMany();
-  await prisma.marks.deleteMany();
-  await prisma.reportCard.deleteMany();
-  await prisma.notice.deleteMany();
-  await prisma.gradingScale.deleteMany();
-  await prisma.certificateLog.deleteMany();
-  await prisma.assignment.deleteMany();
-  await prisma.leaveRequest.deleteMany();
-  await prisma.timetableSlot.deleteMany();
-  await prisma.period.deleteMany();
-  await prisma.syllabusTopic.deleteMany();
-  await prisma.examSlot.deleteMany();
-  await prisma.studentParent.deleteMany();
-  await prisma.parent.deleteMany();
-  await prisma.student.deleteMany();
-  await prisma.teacherSubject.deleteMany();
-  await prisma.section.deleteMany();
-  await prisma.subject.deleteMany();
-  await prisma.class.deleteMany();
-  await prisma.department.deleteMany();
-  await prisma.teacher.deleteMany();
-  await prisma.user.deleteMany();
-  await prisma.school.deleteMany();
+  const academicYear1 = await prisma.academicYear.upsert({
+    where: {
+      schoolId_name: {
+        schoolId: school1.id,
+        name: '2026-27',
+      },
+    },
+    update: {},
+    create: {
+      id: 'ay-aryabhata-2026-27',
+      schoolId: school1.id,
+      name: '2026-27',
+      startDate: new Date('2026-06-01'),
+      endDate: new Date('2027-04-30'),
+      isCurrent: true,
+    },
+  });
 
-  const academicYear = "2026-27";
-
-  // ═══════════════════════════════════════════════════════════════
-  // TENANT 1: Delhi Public Academy (CBSE, New Delhi)
-  // ═══════════════════════════════════════════════════════════════
-  const schoolA = await prisma.school.create({
-    data: {
-      name: "Delhi Public Academy",
-      boardType: "CBSE",
-      address: "Sector 14, Rohini, New Delhi 110085",
-      phone: "+91 11 2786 1234",
-      email: "info@dpa-delhi.edu.in",
-      website: "https://dpa-delhi.edu.in",
-      principalName: "Dr. Rajeshwar Sharma",
-      affiliationNumber: "CBSE/AFF/2026/2130456",
-      establishedYear: 1998,
-      trustName: "Delhi Educational & Charitable Trust",
-      term1StartDate: new Date("2026-04-01"),
-      term1EndDate: new Date("2026-09-30"),
-      term2StartDate: new Date("2026-10-01"),
-      term2EndDate: new Date("2027-03-31"),
+  // Admin User 1
+  const admin1 = await prisma.user.upsert({
+    where: { email: 'admin@aryabhata.edu.in' },
+    update: {},
+    create: {
+      id: 'user-admin-aryabhata',
+      email: 'admin@aryabhata.edu.in',
+      fullName: 'Vikram Joshi (Admin)',
+      phone: '+91 98220 01101',
+      role: Role.ADMIN,
+      passwordHash: DEV_PASSWORD_HASH,
       isActive: true,
     },
   });
-  console.log(`Created School 1: ${schoolA.name} (${schoolA.id})`);
 
-  // CBSE 9-point Grading scale for School A
-  await prisma.gradingScale.createMany({
-    data: [
-      { schoolId: schoolA.id, minScore: 91, maxScore: 100, grade: "A1" },
-      { schoolId: schoolA.id, minScore: 81, maxScore: 90, grade: "A2" },
-      { schoolId: schoolA.id, minScore: 71, maxScore: 80, grade: "B1" },
-      { schoolId: schoolA.id, minScore: 61, maxScore: 70, grade: "B2" },
-      { schoolId: schoolA.id, minScore: 51, maxScore: 60, grade: "C1" },
-      { schoolId: schoolA.id, minScore: 41, maxScore: 50, grade: "C2" },
-      { schoolId: schoolA.id, minScore: 33, maxScore: 40, grade: "D" },
-      { schoolId: schoolA.id, minScore: 0, maxScore: 32, grade: "E" },
-    ],
-  });
-
-  // Standard 6 Exam Slots for School A
-  const examSlotDefs = [
-    { code: "UT1", name: "Unit Test 1", term: "TERM1", maxScore: 30, order: 1 },
-    { code: "UT2", name: "Unit Test 2", term: "TERM1", maxScore: 30, order: 2 },
-    { code: "TERM1", name: "Half Yearly Exam (Term 1)", term: "TERM1", maxScore: 80, order: 3 },
-    { code: "UT3", name: "Unit Test 3", term: "TERM2", maxScore: 30, order: 4 },
-    { code: "UT4", name: "Unit Test 4", term: "TERM2", maxScore: 30, order: 5 },
-    { code: "TERM2", name: "Annual Exam (Term 2)", term: "TERM2", maxScore: 80, order: 6 },
-  ];
-  for (const s of examSlotDefs) {
-    await prisma.examSlot.create({
-      data: {
-        schoolId: schoolA.id,
-        academicYear,
-        code: s.code,
-        name: s.name,
-        term: s.term,
-        maxScore: s.maxScore,
-        order: s.order,
+  await prisma.schoolMembership.upsert({
+    where: {
+      schoolId_userId: {
+        schoolId: school1.id,
+        userId: admin1.id,
       },
-    });
-  }
-
-  // Periods for School A (8 periods + Lunch break)
-  const periodsA = [];
-  const periodSchedule = [
-    { num: 1, label: "Period 1", start: "08:00", end: "08:45", isBreak: false },
-    { num: 2, label: "Period 2", start: "08:45", end: "09:30", isBreak: false },
-    { num: 3, label: "Period 3", start: "09:30", end: "10:15", isBreak: false },
-    { num: 4, label: "Short Break", start: "10:15", end: "10:30", isBreak: true },
-    { num: 5, label: "Period 4", start: "10:30", end: "11:15", isBreak: false },
-    { num: 6, label: "Period 5", start: "11:15", end: "12:00", isBreak: false },
-    { num: 7, label: "Lunch Break", start: "12:00", end: "12:40", isBreak: true },
-    { num: 8, label: "Period 6", start: "12:40", end: "01:25", isBreak: false },
-    { num: 9, label: "Period 7", start: "01:25", end: "02:10", isBreak: false },
-  ];
-  for (const p of periodSchedule) {
-    const period = await prisma.period.create({
-      data: {
-        schoolId: schoolA.id,
-        periodNumber: p.num,
-        label: p.label,
-        startTime: p.start,
-        endTime: p.end,
-        isBreak: p.isBreak,
-      },
-    });
-    periodsA.push(period);
-  }
-
-  // Staff Users & Teachers for School A
-  const adminUserA = await prisma.user.create({
-    data: {
-      schoolId: schoolA.id,
-      email: "admin@dpa.edu.in",
+    },
+    update: {},
+    create: {
+      schoolId: school1.id,
+      userId: admin1.id,
       role: Role.ADMIN,
-      passwordHash,
-      phone: "+91 98111 22334",
     },
   });
 
-  // Greenfield Admin & Teacher alias for test compatibility
-  await prisma.user.create({
-    data: {
-      schoolId: schoolA.id,
-      email: "admin@greenfield.edu",
-      role: Role.ADMIN,
-      passwordHash,
-      phone: "+91 98111 22330",
-    },
-  });
-
-  const teacherGreenfield = await prisma.user.create({
-    data: {
-      schoolId: schoolA.id,
-      email: "teacher1@greenfield.edu",
+  // Teacher 1
+  const teacherUser1 = await prisma.user.upsert({
+    where: { email: 'teacher.math@aryabhata.edu.in' },
+    update: {},
+    create: {
+      id: 'user-teacher-math-aryabhata',
+      email: 'teacher.math@aryabhata.edu.in',
+      fullName: 'Rajesh Sharma',
+      phone: '+91 98220 01102',
       role: Role.TEACHER,
-      passwordHash,
-      phone: "+91 98111 55000",
-    },
-  });
-  await prisma.teacher.create({
-    data: {
-      userId: teacherGreenfield.id,
-      fullName: "Mr. Greenfield Teacher",
+      passwordHash: DEV_PASSWORD_HASH,
+      isActive: true,
     },
   });
 
-  const principalUserA = await prisma.user.create({
-    data: {
-      schoolId: schoolA.id,
-      email: "principal@dpa.edu.in",
-      role: Role.PRINCIPAL,
-      passwordHash,
-      phone: "+91 98111 22335",
+  await prisma.schoolMembership.upsert({
+    where: {
+      schoolId_userId: {
+        schoolId: school1.id,
+        userId: teacherUser1.id,
+      },
     },
-  });
-
-  const accountantUserA = await prisma.user.create({
-    data: {
-      schoolId: schoolA.id,
-      email: "accountant@dpa.edu.in",
-      role: Role.ACCOUNTANT,
-      passwordHash,
-      phone: "+91 98111 22336",
-    },
-  });
-
-  // Teachers
-  const teacherUserA1 = await prisma.user.create({
-    data: {
-      schoolId: schoolA.id,
-      email: "ananya.sharma@dpa.edu.in",
+    update: {},
+    create: {
+      schoolId: school1.id,
+      userId: teacherUser1.id,
       role: Role.TEACHER,
-      passwordHash,
-      phone: "+91 98111 55001",
-    },
-  });
-  const teacherProfileA1 = await prisma.teacher.create({
-    data: {
-      userId: teacherUserA1.id,
-      fullName: "Mrs. Ananya Sharma",
     },
   });
 
-  const teacherUserA2 = await prisma.user.create({
-    data: {
-      schoolId: schoolA.id,
-      email: "vikram.malhotra@dpa.edu.in",
-      role: Role.TEACHER,
-      passwordHash,
-      phone: "+91 98111 55002",
-    },
-  });
-  const teacherProfileA2 = await prisma.teacher.create({
-    data: {
-      userId: teacherUserA2.id,
-      fullName: "Mr. Vikram Malhotra",
-    },
-  });
-
-  const teacherUserA3 = await prisma.user.create({
-    data: {
-      schoolId: schoolA.id,
-      email: "priya.nair@dpa.edu.in",
-      role: Role.TEACHER,
-      passwordHash,
-      phone: "+91 98111 55003",
-    },
-  });
-  const teacherProfileA3 = await prisma.teacher.create({
-    data: {
-      userId: teacherUserA3.id,
-      fullName: "Ms. Priya Nair",
-    },
-  });
-
-  // Departments for School A
-  const deptScienceA = await prisma.department.create({
-    data: {
-      schoolId: schoolA.id,
-      name: "Science & Technology",
-      headOfDepartmentId: teacherProfileA2.id,
-    },
-  });
-  await prisma.teacher.update({
-    where: { id: teacherProfileA2.id },
-    data: { departmentId: deptScienceA.id },
-  });
-
-  const deptMathsA = await prisma.department.create({
-    data: {
-      schoolId: schoolA.id,
-      name: "Mathematics Department",
-      headOfDepartmentId: teacherProfileA1.id,
-    },
-  });
-  await prisma.teacher.update({
-    where: { id: teacherProfileA1.id },
-    data: { departmentId: deptMathsA.id },
-  });
-
-  const deptHumanitiesA = await prisma.department.create({
-    data: {
-      schoolId: schoolA.id,
-      name: "Languages & Humanities",
-      headOfDepartmentId: teacherProfileA3.id,
-    },
-  });
-  await prisma.teacher.update({
-    where: { id: teacherProfileA3.id },
-    data: { departmentId: deptHumanitiesA.id },
-  });
-
-  // Subjects for School A
-  const subjectsDataA = [
-    "Mathematics",
-    "English Core",
-    "Science",
-    "Social Science",
-    "Hindi Course-A",
-    "Computer Science",
-  ];
-  const subjectMapA = new Map<string, any>();
-  for (const name of subjectsDataA) {
-    const subj = await prisma.subject.create({
-      data: {
-        schoolId: schoolA.id,
-        name,
+  const deptMath1 = await prisma.department.upsert({
+    where: {
+      schoolId_code: {
+        schoolId: school1.id,
+        code: 'MATH',
       },
-    });
-    subjectMapA.set(name, subj);
-  }
-
-  // Link Teachers to Subjects
-  await prisma.teacherSubject.createMany({
-    data: [
-      { teacherId: teacherProfileA1.id, subjectId: subjectMapA.get("Mathematics").id },
-      { teacherId: teacherProfileA1.id, subjectId: subjectMapA.get("Computer Science").id },
-      { teacherId: teacherProfileA2.id, subjectId: subjectMapA.get("Science").id },
-      { teacherId: teacherProfileA3.id, subjectId: subjectMapA.get("English Core").id },
-      { teacherId: teacherProfileA3.id, subjectId: subjectMapA.get("Hindi Course-A").id },
-      { teacherId: teacherProfileA3.id, subjectId: subjectMapA.get("Social Science").id },
-    ],
-  });
-
-  // Classes & Sections for School A
-  const classNames = ["Class 5", "Class 6", "Class 7", "Class 8", "Class 9", "Class 10"];
-  const classMapA = new Map<string, any>();
-  const sectionMapA = new Map<string, any>();
-
-  for (let i = 0; i < classNames.length; i++) {
-    const name = classNames[i];
-    const cls = await prisma.class.create({
-      data: {
-        schoolId: schoolA.id,
-        name,
-        order: i + 1,
-      },
-    });
-    classMapA.set(name, cls);
-
-    // Section A
-    const secA = await prisma.section.create({
-      data: {
-        schoolId: schoolA.id,
-        classId: cls.id,
-        name: "A",
-        academicYear,
-        classTeacherId: i === 0 ? teacherProfileA1.id : i === 1 ? teacherProfileA2.id : null,
-      },
-    });
-    sectionMapA.set(`${name}-A`, secA);
-
-    // Section B
-    const secB = await prisma.section.create({
-      data: {
-        schoolId: schoolA.id,
-        classId: cls.id,
-        name: "B",
-        academicYear,
-        classTeacherId: i === 0 ? teacherProfileA3.id : null,
-      },
-    });
-    sectionMapA.set(`${name}-B`, secB);
-  }
-
-  // Syllabus Topics for Class 5 Mathematics & Science
-  const class5 = classMapA.get("Class 5");
-  const mathsSubj = subjectMapA.get("Mathematics");
-  const scienceSubj = subjectMapA.get("Science");
-
-  const mathsTopics = [
-    { title: "Large Numbers & Indian Number System", order: 1, isCompleted: true },
-    { title: "Addition and Subtraction of 6-digit Numbers", order: 2, isCompleted: true },
-    { title: "Multiplication and Division", order: 3, isCompleted: true },
-    { title: "Factors and Multiples (HCF & LCM)", order: 4, isCompleted: false },
-    { title: "Fractions & Decimals Basics", order: 5, isCompleted: false },
-    { title: "Geometry: Angles and Triangles", order: 6, isCompleted: false },
-  ];
-  for (const t of mathsTopics) {
-    await prisma.syllabusTopic.create({
-      data: {
-        schoolId: schoolA.id,
-        classId: class5.id,
-        subjectId: mathsSubj.id,
-        academicYear,
-        topicTitle: t.title,
-        order: t.order,
-        isCompleted: t.isCompleted,
-        completedDate: t.isCompleted ? new Date("2026-05-15") : null,
-      },
-    });
-  }
-
-  // Timetable Slots for Class 5-A
-  const sec5A = sectionMapA.get("Class 5-A");
-  const days = ["MON", "TUE", "WED", "THU", "FRI"];
-  for (const day of days) {
-    // Period 1: Math
-    await prisma.timetableSlot.create({
-      data: {
-        schoolId: schoolA.id,
-        sectionId: sec5A.id,
-        dayOfWeek: day,
-        periodId: periodsA[0].id,
-        subjectId: mathsSubj.id,
-        teacherId: teacherProfileA1.id,
-        academicYear,
-      },
-    });
-    // Period 2: English
-    await prisma.timetableSlot.create({
-      data: {
-        schoolId: schoolA.id,
-        sectionId: sec5A.id,
-        dayOfWeek: day,
-        periodId: periodsA[1].id,
-        subjectId: subjectMapA.get("English Core").id,
-        teacherId: teacherProfileA3.id,
-        academicYear,
-      },
-    });
-    // Period 3: Science
-    await prisma.timetableSlot.create({
-      data: {
-        schoolId: schoolA.id,
-        sectionId: sec5A.id,
-        dayOfWeek: day,
-        periodId: periodsA[2].id,
-        subjectId: scienceSubj.id,
-        teacherId: teacherProfileA2.id,
-        academicYear,
-      },
-    });
-  }
-
-  // Fee Structures for School A
-  const feeTuition = await prisma.feeStructure.create({
-    data: {
-      schoolId: schoolA.id,
-      name: `Tuition Fee (Q1) - ${academicYear}`,
-      academicYear,
-      amount: 18500.0,
-      frequency: "QUARTERLY",
+    },
+    update: {},
+    create: {
+      id: 'dept-aryabhata-math',
+      schoolId: school1.id,
+      name: 'Mathematics Department',
+      code: 'MATH',
     },
   });
 
-  const feeComputer = await prisma.feeStructure.create({
-    data: {
-      schoolId: schoolA.id,
-      name: `Computer Lab & STEM Fee - ${academicYear}`,
-      academicYear,
-      amount: 4500.0,
-      frequency: "ANNUAL",
+  const teacherProfile1 = await prisma.teacherProfile.upsert({
+    where: { userId: teacherUser1.id },
+    update: {},
+    create: {
+      id: 'tp-rajesh-sharma',
+      schoolId: school1.id,
+      userId: teacherUser1.id,
+      employeeCode: 'EMP-ARYA-001',
+      designation: 'TGT Mathematics',
+      qualification: 'M.Sc. Mathematics, B.Ed.',
+      joiningDate: new Date('2022-06-15'),
+      departmentId: deptMath1.id,
     },
   });
 
-  const feeActivity = await prisma.feeStructure.create({
-    data: {
-      schoolId: schoolA.id,
-      name: `Annual Sports & Cultural Activity Fee - ${academicYear}`,
-      academicYear,
-      amount: 3000.0,
-      frequency: "ANNUAL",
+  // Classes & Sections
+  const class10 = await prisma.class.upsert({
+    where: {
+      schoolId_name: {
+        schoolId: school1.id,
+        name: 'Class 10',
+      },
+    },
+    update: {},
+    create: {
+      id: 'class-aryabhata-10',
+      schoolId: school1.id,
+      name: 'Class 10',
+      order: 10,
     },
   });
 
-  // Parent Users & Student Profiles for School A
-  const parentUserA1 = await prisma.user.create({
-    data: {
-      schoolId: schoolA.id,
-      email: "parent.sharma@gmail.com",
+  const section10A = await prisma.section.upsert({
+    where: {
+      classId_name: {
+        classId: class10.id,
+        name: 'A',
+      },
+    },
+    update: {},
+    create: {
+      id: 'section-aryabhata-10a',
+      schoolId: school1.id,
+      classId: class10.id,
+      name: 'A',
+      capacity: 40,
+      classTeacherId: teacherProfile1.id,
+    },
+  });
+
+  // Subject
+  const subjMath = await prisma.subject.upsert({
+    where: {
+      schoolId_code: {
+        schoolId: school1.id,
+        code: 'MATH10',
+      },
+    },
+    update: {},
+    create: {
+      id: 'subj-aryabhata-math10',
+      schoolId: school1.id,
+      name: 'Mathematics',
+      code: 'MATH10',
+    },
+  });
+
+  await prisma.classSubject.upsert({
+    where: {
+      classId_subjectId: {
+        classId: class10.id,
+        subjectId: subjMath.id,
+      },
+    },
+    update: {},
+    create: {
+      schoolId: school1.id,
+      classId: class10.id,
+      subjectId: subjMath.id,
+      weeklyPeriods: 6,
+    },
+  });
+
+  await prisma.teacherAssignment.upsert({
+    where: {
+      teacherProfileId_sectionId_subjectId_academicYearId: {
+        teacherProfileId: teacherProfile1.id,
+        sectionId: section10A.id,
+        subjectId: subjMath.id,
+        academicYearId: academicYear1.id,
+      },
+    },
+    update: {},
+    create: {
+      schoolId: school1.id,
+      teacherProfileId: teacherProfile1.id,
+      sectionId: section10A.id,
+      subjectId: subjMath.id,
+      academicYearId: academicYear1.id,
+    },
+  });
+
+  // Students & Guardians
+  const student1 = await prisma.student.upsert({
+    where: {
+      schoolId_admissionNo: {
+        schoolId: school1.id,
+        admissionNo: 'ADM-2026-0101',
+      },
+    },
+    update: {},
+    create: {
+      id: 'student-aarav-patel',
+      schoolId: school1.id,
+      admissionNo: 'ADM-2026-0101',
+      admissionDate: new Date('2024-06-10'),
+      fullName: 'Aarav Patel',
+      rollNumber: '101',
+      dob: new Date('2011-04-18'),
+      gender: Gender.MALE,
+      bloodGroup: 'B+',
+      sectionId: section10A.id,
+      status: StudentStatus.ACTIVE,
+      emergencyContactPhone: '+91 98220 44001',
+      parentEmail: 'suresh.patel@example.com',
+    },
+  });
+
+  const parentUser1 = await prisma.user.upsert({
+    where: { email: 'suresh.patel@example.com' },
+    update: {},
+    create: {
+      id: 'user-parent-suresh-patel',
+      email: 'suresh.patel@example.com',
+      fullName: 'Suresh Patel',
+      phone: '+91 98220 44001',
       role: Role.PARENT,
-      passwordHash,
-      phone: "+91 98222 11001",
-    },
-  });
-  const parentProfileA1 = await prisma.parent.create({
-    data: {
-      userId: parentUserA1.id,
-      schoolId: schoolA.id,
-      fullName: "Mr. Suresh Sharma",
-      phone: "+91 98222 11001",
+      passwordHash: DEV_PASSWORD_HASH,
+      isActive: true,
     },
   });
 
-  const parentUserA2 = await prisma.user.create({
-    data: {
-      schoolId: schoolA.id,
-      email: "parent.verma@gmail.com",
+  await prisma.schoolMembership.upsert({
+    where: {
+      schoolId_userId: {
+        schoolId: school1.id,
+        userId: parentUser1.id,
+      },
+    },
+    update: {},
+    create: {
+      schoolId: school1.id,
+      userId: parentUser1.id,
       role: Role.PARENT,
-      passwordHash,
-      phone: "+91 98222 11002",
-    },
-  });
-  const parentProfileA2 = await prisma.parent.create({
-    data: {
-      userId: parentUserA2.id,
-      schoolId: schoolA.id,
-      fullName: "Mrs. Meena Verma",
-      phone: "+91 98222 11002",
     },
   });
 
-  // Students for Class 5-A
-  const student1 = await prisma.student.create({
-    data: {
-      schoolId: schoolA.id,
-      admissionNo: "AY-2026-0001",
-      rollNumber: "01",
-      fullName: "AARAV SHARMA",
-      dob: new Date("2015-08-14"),
-      sectionId: sec5A.id,
-      academicYear,
-      gender: "Male",
-      bloodGroup: "B+",
-      category: "General",
-      currentAddress: "Flat 402, Royal Palms, Rohini Sector 14, New Delhi",
-      permanentAddress: "Flat 402, Royal Palms, Rohini Sector 14, New Delhi",
-      fatherName: "Mr. Suresh Sharma",
-      fatherOccupation: "Software Architect",
-      fatherPhone: "+91 98222 11001",
-      motherName: "Mrs. Kavita Sharma",
-      motherOccupation: "Teacher",
-      motherPhone: "+91 98222 11009",
-      emergencyContactName: "Suresh Sharma",
-      emergencyContactPhone: "+91 98222 11001",
-      classDesignation: "Class Monitor",
+  const parentProfile1 = await prisma.parentProfile.upsert({
+    where: { userId: parentUser1.id },
+    update: {},
+    create: {
+      id: 'pp-suresh-patel',
+      userId: parentUser1.id,
+      fullName: 'Suresh Patel',
+      phone: '+91 98220 44001',
+      occupation: 'Software Engineer',
     },
   });
 
-  const student2 = await prisma.student.create({
-    data: {
-      schoolId: schoolA.id,
-      admissionNo: "AY-2026-0002",
-      rollNumber: "02",
-      fullName: "DIYA VERMA",
-      dob: new Date("2015-11-22"),
-      sectionId: sec5A.id,
-      academicYear,
-      gender: "Female",
-      bloodGroup: "O+",
-      category: "OBC",
-      currentAddress: "House 12B, Pocket 4, Rohini Sector 15, New Delhi",
-      fatherName: "Mr. Rakesh Verma",
-      fatherOccupation: "Businessman",
-      motherName: "Mrs. Meena Verma",
-      motherOccupation: "Advocate",
-      motherPhone: "+91 98222 11002",
-      emergencyContactName: "Meena Verma",
-      emergencyContactPhone: "+91 98222 11002",
-    },
-  });
-
-  const student3 = await prisma.student.create({
-    data: {
-      schoolId: schoolA.id,
-      admissionNo: "AY-2026-0003",
-      rollNumber: "03",
-      fullName: "ROHAN GUPTA",
-      dob: new Date("2015-05-19"),
-      sectionId: sec5A.id,
-      academicYear,
-      gender: "Male",
-      bloodGroup: "A+",
-      fatherName: "Mr. Anil Gupta",
-      fatherOccupation: "Chartered Accountant",
-      fatherPhone: "+91 98222 11003",
-      motherName: "Mrs. Sunita Gupta",
-    },
-  });
-
-  // Link Students to Parents
-  await prisma.studentParent.create({
-    data: {
-      studentId: student1.id,
-      parentId: parentProfileA1.id,
-      relationship: "Father",
-      isPrimary: true,
-    },
-  });
-
-  await prisma.studentParent.create({
-    data: {
-      studentId: student2.id,
-      parentId: parentProfileA2.id,
-      relationship: "Mother",
-      isPrimary: true,
-    },
-  });
-
-  // Attendance Records for Past 30 Days for Class 5-A Students
-  const today = new Date();
-  for (let i = 30; i >= 0; i--) {
-    const d = new Date(today);
-    d.setDate(d.getDate() - i);
-    // Skip Sundays
-    if (d.getDay() === 0) continue;
-
-    const dateOnly = new Date(d.toISOString().slice(0, 10));
-
-    // Aarav: 95% Present
-    const status1: AttendanceStatus = i === 12 ? AttendanceStatus.ABSENT : i === 5 ? AttendanceStatus.LATE : AttendanceStatus.PRESENT;
-    await prisma.attendance.create({
-      data: {
-        schoolId: schoolA.id,
+  await prisma.studentGuardian.upsert({
+    where: {
+      studentId_parentProfileId: {
         studentId: student1.id,
-        sectionId: sec5A.id,
-        date: dateOnly,
-        status: status1,
-        markedBy: teacherUserA1.id,
+        parentProfileId: parentProfile1.id,
       },
-    });
-
-    // Diya: 100% Present
-    await prisma.attendance.create({
-      data: {
-        schoolId: schoolA.id,
-        studentId: student2.id,
-        sectionId: sec5A.id,
-        date: dateOnly,
-        status: AttendanceStatus.PRESENT,
-        markedBy: teacherUserA1.id,
-      },
-    });
-
-    // Rohan: Mixed
-    const status3: AttendanceStatus = i === 8 || i === 9 ? AttendanceStatus.ABSENT : AttendanceStatus.PRESENT;
-    await prisma.attendance.create({
-      data: {
-        schoolId: schoolA.id,
-        studentId: student3.id,
-        sectionId: sec5A.id,
-        date: dateOnly,
-        status: status3,
-        markedBy: teacherUserA1.id,
-      },
-    });
-  }
-
-  // Marks for Exam Slots
-  const examSlotsA = await prisma.examSlot.findMany({
-    where: { schoolId: schoolA.id },
-  });
-
-  const ut1Slot = examSlotsA.find((s) => s.code === "UT1")!;
-  const ut2Slot = examSlotsA.find((s) => s.code === "UT2")!;
-  const term1Slot = examSlotsA.find((s) => s.code === "TERM1")!;
-
-  // Marks for Aarav Sharma
-  await prisma.marks.createMany({
-    data: [
-      { studentId: student1.id, subjectId: mathsSubj.id, examName: "UT1", score: 28.5, maxScore: 30 },
-      { studentId: student1.id, subjectId: mathsSubj.id, examName: "UT2", score: 29.0, maxScore: 30 },
-      { studentId: student1.id, subjectId: mathsSubj.id, examName: "TERM1", score: 76.0, maxScore: 80 },
-      { studentId: student1.id, subjectId: scienceSubj.id, examName: "UT1", score: 27.0, maxScore: 30 },
-      { studentId: student1.id, subjectId: scienceSubj.id, examName: "UT2", score: 28.0, maxScore: 30 },
-      { studentId: student1.id, subjectId: scienceSubj.id, examName: "TERM1", score: 74.5, maxScore: 80 },
-      { studentId: student1.id, subjectId: subjectMapA.get("English Core").id, examName: "UT1", score: 26.0, maxScore: 30 },
-      { studentId: student1.id, subjectId: subjectMapA.get("English Core").id, examName: "TERM1", score: 72.0, maxScore: 80 },
-    ],
-  });
-
-  // Marks for Diya Verma
-  await prisma.marks.createMany({
-    data: [
-      { studentId: student2.id, subjectId: mathsSubj.id, examName: "UT1", score: 30.0, maxScore: 30 },
-      { studentId: student2.id, subjectId: mathsSubj.id, examName: "UT2", score: 30.0, maxScore: 30 },
-      { studentId: student2.id, subjectId: mathsSubj.id, examName: "TERM1", score: 79.0, maxScore: 80 },
-      { studentId: student2.id, subjectId: scienceSubj.id, examName: "UT1", score: 29.5, maxScore: 30 },
-      { studentId: student2.id, subjectId: scienceSubj.id, examName: "TERM1", score: 78.0, maxScore: 80 },
-    ],
-  });
-
-  // Report Card for Aarav Sharma
-  await prisma.reportCard.create({
-    data: {
-      schoolId: schoolA.id,
+    },
+    update: {},
+    create: {
+      schoolId: school1.id,
       studentId: student1.id,
-      academicYear,
-      term: "TERM1",
-      remarks: "Excellent grasp of concepts and consistent classroom participation. Keep up the high standard!",
+      parentProfileId: parentProfile1.id,
+      relationship: GuardianRelationship.FATHER,
+      isPrimary: true,
     },
   });
 
-  // Invoices & Payments for School A
-  // Invoice 1: Aarav Tuition (PAID)
-  const invAaravTuition = await prisma.feeInvoice.create({
-    data: {
-      schoolId: schoolA.id,
+  // Attendance
+  await prisma.studentAttendance.upsert({
+    where: {
+      studentId_date_sectionId_academicYearId: {
+        studentId: student1.id,
+        date: new Date('2026-11-09'),
+        sectionId: section10A.id,
+        academicYearId: academicYear1.id,
+      },
+    },
+    update: {},
+    create: {
+      schoolId: school1.id,
       studentId: student1.id,
-      feeStructureId: feeTuition.id,
-      amountDue: 18500.0,
-      discountAmount: 0.0,
-      dueDate: new Date("2026-05-10"),
+      sectionId: section10A.id,
+      academicYearId: academicYear1.id,
+      date: new Date('2026-11-09'),
+      status: StudentAttendanceStatus.PRESENT,
+      markedByUserId: teacherUser1.id,
+    },
+  });
+
+  // Fee Structure & Invoicing
+  const feeStructure1 = await prisma.feeStructure.upsert({
+    where: { id: 'fee-aryabhata-class10-annual' },
+    update: {},
+    create: {
+      id: 'fee-aryabhata-class10-annual',
+      schoolId: school1.id,
+      academicYearId: academicYear1.id,
+      classId: class10.id,
+      name: 'Class 10 Annual Tuition & Lab Fee',
+      totalAmount: 48000.00,
+      frequency: FeeFrequency.TERM,
+    },
+  });
+
+  await prisma.feeInstallment.upsert({
+    where: {
+      feeStructureId_installmentNumber: {
+        feeStructureId: feeStructure1.id,
+        installmentNumber: 1,
+      },
+    },
+    update: {},
+    create: {
+      schoolId: school1.id,
+      feeStructureId: feeStructure1.id,
+      installmentNumber: 1,
+      name: 'Term 1 Installment',
+      amount: 24000.00,
+      dueDate: new Date('2026-07-15'),
+    },
+  });
+
+  const invoice1 = await prisma.feeInvoice.upsert({
+    where: {
+      schoolId_invoiceNumber: {
+        schoolId: school1.id,
+        invoiceNumber: 'INV-ARYA-2026-0001',
+      },
+    },
+    update: {},
+    create: {
+      id: 'inv-aryabhata-0001',
+      schoolId: school1.id,
+      academicYearId: academicYear1.id,
+      studentId: student1.id,
+      feeStructureId: feeStructure1.id,
+      invoiceNumber: 'INV-ARYA-2026-0001',
+      totalAmountDue: 24000.00,
+      discountAmount: 0.00,
+      netAmountDue: 24000.00,
+      dueDate: new Date('2026-07-15'),
       status: InvoiceStatus.PAID,
     },
   });
-  await prisma.payment.create({
-    data: {
-      schoolId: schoolA.id,
-      invoiceId: invAaravTuition.id,
-      amount: 18500.0,
-      method: "UPI",
-      receiptNumber: "REC-2026-0001",
-      paidAt: new Date("2026-05-04"),
+
+  await prisma.feePayment.upsert({
+    where: {
+      schoolId_receiptNumber: {
+        schoolId: school1.id,
+        receiptNumber: 'REC-ARYA-2026-0001',
+      },
+    },
+    update: {},
+    create: {
+      id: 'pay-aryabhata-0001',
+      schoolId: school1.id,
+      invoiceId: invoice1.id,
+      receiptNumber: 'REC-ARYA-2026-0001',
+      amount: 24000.00,
+      paymentMethod: PaymentMethod.UPI,
+      transactionReference: 'UPI/20260714/991044',
+      receivedByUserId: admin1.id,
+      remarks: 'Term 1 Tuition Fee Paid via UPI',
     },
   });
 
-  // Invoice 2: Aarav Computer Fee (UNPAID)
-  await prisma.feeInvoice.create({
-    data: {
-      schoolId: schoolA.id,
+  // Exam Configuration & Marks
+  const examTypeUT1 = await prisma.examType.upsert({
+    where: {
+      schoolId_academicYearId_code: {
+        schoolId: school1.id,
+        academicYearId: academicYear1.id,
+        code: 'UT1',
+      },
+    },
+    update: {},
+    create: {
+      id: 'et-aryabhata-ut1',
+      schoolId: school1.id,
+      academicYearId: academicYear1.id,
+      code: 'UT1',
+      name: 'Unit Test 1',
+      order: 1,
+    },
+  });
+
+  const exam1 = await prisma.examination.upsert({
+    where: { id: 'exam-aryabhata-10-ut1' },
+    update: {},
+    create: {
+      id: 'exam-aryabhata-10-ut1',
+      schoolId: school1.id,
+      academicYearId: academicYear1.id,
+      examTypeId: examTypeUT1.id,
+      classId: class10.id,
+      startDate: new Date('2026-08-01'),
+      endDate: new Date('2026-08-07'),
+      status: ExamLifecycleStatus.PUBLISHED,
+    },
+  });
+
+  const examSubj1 = await prisma.examSubject.upsert({
+    where: {
+      examinationId_subjectId: {
+        examinationId: exam1.id,
+        subjectId: subjMath.id,
+      },
+    },
+    update: {},
+    create: {
+      id: 'es-aryabhata-10-ut1-math',
+      schoolId: school1.id,
+      examinationId: exam1.id,
+      subjectId: subjMath.id,
+      examDate: new Date('2026-08-03'),
+      maxMarks: 50.00,
+      passMarks: 18.00,
+    },
+  });
+
+  await prisma.studentMark.upsert({
+    where: {
+      examSubjectId_studentId: {
+        examSubjectId: examSubj1.id,
+        studentId: student1.id,
+      },
+    },
+    update: {},
+    create: {
+      schoolId: school1.id,
+      examSubjectId: examSubj1.id,
       studentId: student1.id,
-      feeStructureId: feeComputer.id,
-      amountDue: 4500.0,
-      discountAmount: 0.0,
-      dueDate: new Date("2026-11-15"),
-      status: InvoiceStatus.UNPAID,
+      marksObtained: 46.50,
+      enteredByUserId: teacherUser1.id,
     },
   });
 
-  // Invoice 3: Diya Tuition (PARTIALLY_PAID)
-  const invDiyaTuition = await prisma.feeInvoice.create({
-    data: {
-      schoolId: schoolA.id,
-      studentId: student2.id,
-      feeStructureId: feeTuition.id,
-      amountDue: 18500.0,
-      discountAmount: 0.0,
-      dueDate: new Date("2026-05-10"),
-      status: InvoiceStatus.PARTIALLY_PAID,
-    },
-  });
-  await prisma.payment.create({
-    data: {
-      schoolId: schoolA.id,
-      invoiceId: invDiyaTuition.id,
-      amount: 10000.0,
-      method: "BANK_TRANSFER",
-      receiptNumber: "REC-2026-0002",
-      paidAt: new Date("2026-05-08"),
+  // ============================================================================
+  // SCHOOL 2: Saraswati Vidya Mandir (State Board)
+  // ============================================================================
+  console.log('Seeding School 2: Saraswati Vidya Mandir...');
+
+  const school2 = await prisma.school.upsert({
+    where: { id: 'school-saraswati-state' },
+    update: {},
+    create: {
+      id: 'school-saraswati-state',
+      name: 'Saraswati Vidya Mandir',
+      boardType: 'STATE',
+      address: 'Station Road, Nashik, Maharashtra 422001',
+      phone: '+91 253 2590 0202',
+      email: 'office@saraswativm.edu.in',
+      principalName: 'Smt. Vandana Deshpande',
+      affiliationNumber: 'MH-STATE-2026-8812',
+      trustName: 'Shri Saraswati Shikshan Prasarak Mandal',
+      establishedYear: 1995,
+      status: SchoolStatus.ACTIVE,
     },
   });
 
-  // Staff Leave Request for School A
-  await prisma.leaveRequest.create({
-    data: {
-      schoolId: schoolA.id,
-      userId: teacherUserA1.id,
-      leaveType: "Casual",
-      startDate: new Date("2026-10-15"),
-      endDate: new Date("2026-10-16"),
-      reason: "Family wedding event in hometown",
-      status: "APPROVED",
-      approvedByUserId: principalUserA.id,
-      adminRemark: "Approved with class teacher substitute arranged.",
+  const academicYear2 = await prisma.academicYear.upsert({
+    where: {
+      schoolId_name: {
+        schoolId: school2.id,
+        name: '2026-27',
+      },
+    },
+    update: {},
+    create: {
+      id: 'ay-saraswati-2026-27',
+      schoolId: school2.id,
+      name: '2026-27',
+      startDate: new Date('2026-06-15'),
+      endDate: new Date('2027-05-01'),
+      isCurrent: true,
     },
   });
 
-  await prisma.leaveRequest.create({
-    data: {
-      schoolId: schoolA.id,
-      userId: teacherUserA2.id,
-      leaveType: "Sick",
-      startDate: new Date("2026-11-02"),
-      endDate: new Date("2026-11-03"),
-      reason: "Viral fever and physician advised rest",
-      status: "PENDING",
-    },
-  });
-
-  // Assignments for Class 5-A
-  await prisma.assignment.create({
-    data: {
-      schoolId: schoolA.id,
-      sectionId: sec5A.id,
-      subjectId: mathsSubj.id,
-      teacherId: teacherProfileA1.id,
-      title: "Maths Worksheet: HCF & LCM Real-life Word Problems",
-      description: "Solve questions 1 through 15 from Chapter 4 worksheet in your mathematics homework notebook.",
-      dueDate: new Date("2026-10-25"),
-    },
-  });
-
-  await prisma.assignment.create({
-    data: {
-      schoolId: schoolA.id,
-      sectionId: sec5A.id,
-      subjectId: scienceSubj.id,
-      teacherId: teacherProfileA2.id,
-      title: "Science Project: Plant Adaptation Chart",
-      description: "Prepare a neat labeled chart illustrating terrestrial vs aquatic plant adaptations with short descriptions.",
-      dueDate: new Date("2026-10-28"),
-    },
-  });
-
-  // Notices for School A
-  await prisma.notice.create({
-    data: {
-      schoolId: schoolA.id,
-      title: "Parent-Teacher Meeting (PTM) for Term 1 Evaluation",
-      body: "Dear Parents, the Parent-Teacher Meeting to discuss your ward's Half Yearly Exam performance will be held on Saturday, 17th October 2026 between 09:00 AM and 01:00 PM. Kindly adhere to the time slot allotted.",
-      audience: [Role.PARENT, Role.TEACHER, Role.ADMIN],
-    },
-  });
-
-  await prisma.notice.create({
-    data: {
-      schoolId: schoolA.id,
-      title: "Diwali Holidays and School Re-opening Schedule",
-      body: "The school will remain closed for Diwali break from 28th October to 3rd November 2026. Regular classes will resume from Wednesday, 4th November 2026.",
-      audience: [Role.PARENT, Role.TEACHER, Role.ADMIN, Role.PRINCIPAL, Role.ACCOUNTANT],
-    },
-  });
-
-  // ═══════════════════════════════════════════════════════════════
-  // TENANT 2: St. Xavier's High School (ICSE / State, Mumbai)
-  // ═══════════════════════════════════════════════════════════════
-  const schoolB = await prisma.school.create({
-    data: {
-      name: "St. Xavier's High School",
-      boardType: "ICSE",
-      address: "Dhobi Talao, Fort, Mumbai, Maharashtra 400001",
-      phone: "+91 22 2262 0555",
-      email: "admin@stxaviers-mumbai.edu",
-      website: "https://stxaviers-mumbai.edu",
-      principalName: "Fr. Augustine D'Souza",
-      affiliationNumber: "ICSE/MAH/098/2026",
-      establishedYear: 1869,
-      trustName: "St. Xavier's Education Society",
+  const admin2 = await prisma.user.upsert({
+    where: { email: 'admin@saraswativm.edu.in' },
+    update: {},
+    create: {
+      id: 'user-admin-saraswati',
+      email: 'admin@saraswativm.edu.in',
+      fullName: 'Ramesh Kadam (Admin)',
+      phone: '+91 94220 02201',
+      role: Role.ADMIN,
+      passwordHash: DEV_PASSWORD_HASH,
       isActive: true,
     },
   });
-  console.log(`Created School 2: ${schoolB.name} (${schoolB.id})`);
 
-  // Grading scale for School B
-  await prisma.gradingScale.createMany({
-    data: [
-      { schoolId: schoolB.id, minScore: 90, maxScore: 100, grade: "A+" },
-      { schoolId: schoolB.id, minScore: 80, maxScore: 89, grade: "A" },
-      { schoolId: schoolB.id, minScore: 70, maxScore: 79, grade: "B+" },
-      { schoolId: schoolB.id, minScore: 60, maxScore: 69, grade: "B" },
-      { schoolId: schoolB.id, minScore: 50, maxScore: 59, grade: "C" },
-      { schoolId: schoolB.id, minScore: 35, maxScore: 49, grade: "D" },
-      { schoolId: schoolB.id, minScore: 0, maxScore: 34, grade: "F" },
-    ],
-  });
-
-  // Users for School B
-  const adminB = await prisma.user.create({
-    data: {
-      schoolId: schoolB.id,
-      email: "admin@stxaviers.edu",
+  await prisma.schoolMembership.upsert({
+    where: {
+      schoolId_userId: {
+        schoolId: school2.id,
+        userId: admin2.id,
+      },
+    },
+    update: {},
+    create: {
+      schoolId: school2.id,
+      userId: admin2.id,
       role: Role.ADMIN,
-      passwordHash,
-      phone: "+91 98200 11223",
     },
   });
 
-  // Oakridge Admin alias for test compatibility
-  await prisma.user.create({
-    data: {
-      schoolId: schoolB.id,
-      email: "admin@oakridge.edu",
-      role: Role.ADMIN,
-      passwordHash,
-      phone: "+91 98200 11220",
+  const class8 = await prisma.class.upsert({
+    where: {
+      schoolId_name: {
+        schoolId: school2.id,
+        name: 'Class 8',
+      },
     },
-  });
-
-  const accountantB = await prisma.user.create({
-    data: {
-      schoolId: schoolB.id,
-      email: "accountant@stxaviers.edu",
-      role: Role.ACCOUNTANT,
-      passwordHash,
-      phone: "+91 98200 11224",
-    },
-  });
-
-  const teacherUserB1 = await prisma.user.create({
-    data: {
-      schoolId: schoolB.id,
-      email: "teacher.pereira@stxaviers.edu",
-      role: Role.TEACHER,
-      passwordHash,
-      phone: "+91 98200 11225",
-    },
-  });
-  const teacherProfileB1 = await prisma.teacher.create({
-    data: {
-      userId: teacherUserB1.id,
-      fullName: "Mr. Joseph Pereira",
-    },
-  });
-
-  const parentUserB1 = await prisma.user.create({
-    data: {
-      schoolId: schoolB.id,
-      email: "parent.fernandes@gmail.com",
-      role: Role.PARENT,
-      passwordHash,
-      phone: "+91 98200 44556",
-    },
-  });
-  const parentProfileB1 = await prisma.parent.create({
-    data: {
-      userId: parentUserB1.id,
-      schoolId: schoolB.id,
-      fullName: "Mrs. Clara Fernandes",
-      phone: "+91 98200 44556",
-    },
-  });
-
-  const classB1 = await prisma.class.create({
-    data: {
-      schoolId: schoolB.id,
-      name: "Grade 8",
+    update: {},
+    create: {
+      id: 'class-saraswati-8',
+      schoolId: school2.id,
+      name: 'Class 8',
       order: 8,
     },
   });
 
-  const secB1 = await prisma.section.create({
-    data: {
-      schoolId: schoolB.id,
-      classId: classB1.id,
-      name: "A",
-      academicYear,
-      classTeacherId: teacherProfileB1.id,
+  const section8A = await prisma.section.upsert({
+    where: {
+      classId_name: {
+        classId: class8.id,
+        name: 'A',
+      },
+    },
+    update: {},
+    create: {
+      id: 'section-saraswati-8a',
+      schoolId: school2.id,
+      classId: class8.id,
+      name: 'A',
+      capacity: 45,
     },
   });
 
-  const studentB1 = await prisma.student.create({
-    data: {
-      schoolId: schoolB.id,
-      admissionNo: "AY-2026-0101",
-      rollNumber: "12",
-      fullName: "NEIL FERNANDES",
-      dob: new Date("2012-03-25"),
-      sectionId: secB1.id,
-      academicYear,
-      gender: "Male",
-      bloodGroup: "A+",
-      fatherName: "Mr. Francis Fernandes",
-      motherName: "Mrs. Clara Fernandes",
-      currentAddress: "Bandra West, Mumbai 400050",
+  await prisma.student.upsert({
+    where: {
+      schoolId_admissionNo: {
+        schoolId: school2.id,
+        admissionNo: 'ADM-SVM-2026-0088',
+      },
+    },
+    update: {},
+    create: {
+      id: 'student-swara-bhosale',
+      schoolId: school2.id,
+      admissionNo: 'ADM-SVM-2026-0088',
+      admissionDate: new Date('2024-06-20'),
+      fullName: 'Swara Bhosale',
+      rollNumber: '08',
+      dob: new Date('2013-08-22'),
+      gender: Gender.FEMALE,
+      sectionId: section8A.id,
+      status: StudentStatus.ACTIVE,
+      emergencyContactPhone: '+91 94220 77002',
     },
   });
 
-  await prisma.studentParent.create({
-    data: {
-      studentId: studentB1.id,
-      parentId: parentProfileB1.id,
-      relationship: "Mother",
-      isPrimary: true,
-    },
-  });
-
-  // Transfer Certificate Log for School B
-  await prisma.certificateLog.create({
-    data: {
-      schoolId: schoolB.id,
-      studentId: studentB1.id,
-      tcNumber: "TC-2026-001",
-      issueDate: new Date("2026-09-15"),
-      reasonForLeaving: "Relocation of family to Bangalore",
-      lastAttendanceDate: new Date("2026-09-14"),
-      conductRemark: "Exemplary character and academic progress.",
-      generatedByUserId: adminB.id,
-    },
-  });
-
-  console.log("\n✅ Database seed completed successfully with complete 2-tenant Indian School dataset!");
-  console.log("--------------------------------------------------------------------------------");
-  console.log("Credentials (All accounts password: password123):");
-  console.log("• School 1 (CBSE - Delhi Public Academy):");
-  console.log("    - Admin:      admin@dpa.edu.in");
-  console.log("    - Principal:  principal@dpa.edu.in");
-  console.log("    - Teacher:    ananya.sharma@dpa.edu.in / vikram.malhotra@dpa.edu.in");
-  console.log("    - Parent:     parent.sharma@gmail.com / parent.verma@gmail.com");
-  console.log("    - Accountant: accountant@dpa.edu.in");
-  console.log("• School 2 (ICSE - St. Xavier's High School):");
-  console.log("    - Admin:      admin@stxaviers.edu");
-  console.log("    - Teacher:    teacher.pereira@stxaviers.edu");
-  console.log("    - Parent:     parent.fernandes@gmail.com");
-  console.log("    - Accountant: accountant@stxaviers.edu");
-  console.log("--------------------------------------------------------------------------------\n");
+  console.log('--- Synthetic Development Seed Completed Successfully ---');
+  console.log('Seed summary:');
+  console.log('  School 1: Aryabhata Vidyapeeth (CBSE) -> 1 class, 1 section, 1 teacher, 1 student, fee invoice & marks');
+  console.log('  School 2: Saraswati Vidya Mandir (State) -> 1 class, 1 section, 1 student, multi-tenant separated');
 }
 
 main()
   .catch((e) => {
-    console.error("❌ Seed failed:", e);
+    console.error('Seed execution error:', e);
     process.exit(1);
   })
   .finally(async () => {

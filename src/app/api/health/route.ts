@@ -1,51 +1,37 @@
 import { NextResponse } from "next/server";
-import prisma from "@/lib/prisma";
+import { prisma } from "@/lib/database/prisma";
+
+export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const startTime = Date.now();
-  let dbStatus = "healthy";
-  let dbLatency = 0;
-
+  const timestamp = new Date().toISOString();
   try {
-    const pingStart = Date.now();
+    // Database connectivity probe
     await prisma.$queryRaw`SELECT 1`;
-    dbLatency = Date.now() - pingStart;
-  } catch (error: any) {
-    dbStatus = "unhealthy";
-  }
 
-  const isProd = process.env.NODE_ENV === "production";
-
-  if (isProd) {
     return NextResponse.json(
       {
-        status: dbStatus === "healthy" ? "ok" : "degraded",
-        timestamp: new Date().toISOString(),
+        status: "healthy",
+        app: "Vidyora",
+        tagline: "Smarter Schools. Better Learning.",
+        version: "1.0.0-phase1b",
+        database: "connected",
+        timestamp,
       },
-      { status: dbStatus === "healthy" ? 200 : 503 }
+      { status: 200 }
+    );
+  } catch (err: unknown) {
+    const error = err instanceof Error ? err.message : "Database connection failed";
+    console.error("[HEALTH_CHECK_ERROR]", error);
+    return NextResponse.json(
+      {
+        status: "degraded",
+        app: "Vidyora",
+        database: "disconnected",
+        error: "Database connectivity check failed",
+        timestamp,
+      },
+      { status: 503 }
     );
   }
-
-  const memoryUsage = process.memoryUsage();
-
-  return NextResponse.json(
-    {
-      status: dbStatus === "healthy" ? "ok" : "degraded",
-      timestamp: new Date().toISOString(),
-      uptimeSeconds: Math.floor(process.uptime()),
-      database: {
-        status: dbStatus,
-        latencyMs: dbLatency,
-      },
-      memory: {
-        heapUsedMb: (memoryUsage.heapUsed / 1024 / 1024).toFixed(2),
-        heapTotalMb: (memoryUsage.heapTotal / 1024 / 1024).toFixed(2),
-        rssMb: (memoryUsage.rss / 1024 / 1024).toFixed(2),
-      },
-      environment: process.env.NODE_ENV || "development",
-      version: "1.0.0",
-      responseTimeMs: Date.now() - startTime,
-    },
-    { status: dbStatus === "healthy" ? 200 : 503 }
-  );
 }

@@ -3,8 +3,8 @@ import Providers from "@/components/providers";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "SchoolERP — School Management System",
-  description: "Multi-tenant School ERP with role-based access control",
+  title: "Vidyora — Smarter Schools. Better Learning.",
+  description: "Modern, secure multi-tenant School Management System for Indian Schools.",
 };
 
 export default function RootLayout({
@@ -14,13 +14,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <head>
-        <link
-          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
-          rel="stylesheet"
-        />
-      </head>
-      <body>
+      <body className="antialiased">
         <Providers>{children}</Providers>
       </body>
     </html>

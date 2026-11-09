@@ -24,29 +24,34 @@ type Role = (typeof Role)[keyof typeof Role];
  */
 const ROLE_ROUTES: Record<string, Role[]> = {
   "/admin": [Role.ADMIN, Role.PRINCIPAL],
+  "/principal": [Role.PRINCIPAL, Role.ADMIN],
   "/teacher": [Role.TEACHER],
   "/parent": [Role.PARENT],
   "/accountant": [Role.ACCOUNTANT, Role.ADMIN, Role.PRINCIPAL],
 };
 
 /** Routes that don't require authentication */
-const PUBLIC_PATHS = ["/login", "/api/auth", "/api/schools", "/api/health"];
+const PUBLIC_PATHS = ["/login", "/api/auth", "/api/health", "/"];
 
 /** Role-based default dashboards for redirect after login */
 const ROLE_DASHBOARDS: Record<Role, string> = {
-  [Role.ADMIN]: "/admin/dashboard",
-  [Role.PRINCIPAL]: "/admin/dashboard",
-  [Role.TEACHER]: "/teacher/dashboard",
-  [Role.PARENT]: "/parent/dashboard",
-  [Role.ACCOUNTANT]: "/accountant/dashboard",
+  [Role.ADMIN]: "/admin",
+  [Role.PRINCIPAL]: "/principal",
+  [Role.TEACHER]: "/teacher",
+  [Role.PARENT]: "/parent",
+  [Role.ACCOUNTANT]: "/accountant",
 };
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Allow public paths, static assets, and Next.js internals
+  const isPublicPath = PUBLIC_PATHS.some((p) =>
+    p === "/" ? pathname === "/" : pathname.startsWith(p)
+  );
+
   if (
-    PUBLIC_PATHS.some((p) => pathname.startsWith(p)) ||
+    isPublicPath ||
     pathname.startsWith("/_next") ||
     pathname.startsWith("/favicon") ||
     (!pathname.startsWith("/api") && pathname.includes("."))

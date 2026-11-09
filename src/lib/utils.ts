@@ -1,78 +1,78 @@
-import { getServerSession } from "next-auth";
-import { authOptions } from "./auth";
-import { tenantClient } from "./tenant";
 import { NextResponse } from "next/server";
-import { Prisma, Role } from "@prisma/client";
+import { Role } from "@prisma/client";
 
 /**
- * Get the current session or return a 401 response.
- * Use in API route handlers.
+ * Standard 400 Bad Request response
  */
-export async function getRequiredSession() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.schoolId) {
-    return null;
-  }
-  return session;
-}
-
-/**
- * Get a tenant-scoped Prisma client from the current session.
- * Returns { db, session } or null.
- */
-export async function getTenantDb() {
-  const session = await getRequiredSession();
-  if (!session) {
-    return null;
-  }
-  return {
-    db: tenantClient(session.user.schoolId),
-    session,
-  };
-}
-
-/**
- * Check if the authenticated session has one of the required roles.
- */
-export function hasRole(session: { user: { role: Role } }, allowedRoles: Role[]): boolean {
-  return allowedRoles.includes(session.user.role);
+export function badRequest(message = "Bad request", details?: unknown) {
+  return NextResponse.json({ error: message, details }, { status: 400 });
 }
 
 /**
  * Standard 401 Unauthorized response
  */
-export function unauthorized() {
-  return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+export function unauthorized(message = "Unauthorized") {
+  return NextResponse.json({ error: message }, { status: 401 });
 }
 
 /**
  * Standard 403 Forbidden response
  */
-export function forbidden(message: string = "Forbidden") {
+export function forbidden(message = "Forbidden") {
   return NextResponse.json({ error: message }, { status: 403 });
 }
 
 /**
  * Standard 404 Not Found response
  */
-export function notFound(message: string = "Not found") {
+export function notFound(message = "Not found") {
   return NextResponse.json({ error: message }, { status: 404 });
 }
 
 /**
- * Standard 400 Bad Request response
+ * Standard 500 Internal Server Error response
  */
-export function badRequest(message: string) {
-  return NextResponse.json({ error: message }, { status: 400 });
+export function internalError(message = "Internal server error") {
+  return NextResponse.json({ error: message }, { status: 500 });
 }
 
 /**
- * Format a Prisma Decimal for JSON serialization.
- * Returns a string to avoid floating-point precision loss.
+ * Check if a session has one of the allowed roles
  */
-export function formatDecimal(value: Prisma.Decimal | null): string {
-  if (value === null) return "0.00";
-  return value.toFixed(2);
+export function hasRole(session: { user: { role: Role } } | null | undefined, allowedRoles: readonly Role[]): boolean {
+  if (!session?.user?.role) return false;
+  return allowedRoles.includes(session.user.role);
 }
 
-export { formatDate } from "./formatDate";
+/**
+ * Format Indian Currency (INR)
+ */
+export function formatCurrencyINR(amount: number | string): string {
+  const num = typeof amount === "string" ? parseFloat(amount) : amount;
+  if (isNaN(num)) return "₹0.00";
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    minimumFractionDigits: 2,
+  }).format(num);
+}
+
+/**
+ * Format Date to Indian standard (DD/MM/YYYY)
+ */
+export function formatDateIN(date: Date | string): string {
+  const d = typeof date === "string" ? new Date(date) : date;
+  if (isNaN(d.getTime())) return "";
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(d);
+}
+
+/**
+ * Concatenate class names conditionally
+ */
+export function cn(...classes: (string | boolean | undefined | null)[]): string {
+  return classes.filter(Boolean).join(" ");
+}

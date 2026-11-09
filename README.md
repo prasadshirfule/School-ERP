@@ -1,146 +1,159 @@
-# 🏫 School ERP — Multi-Tenant School Management Platform (CBSE / ICSE / State Boards)
+# 🎓 Vidyora — Smarter Schools. Better Learning.
 
-A commercially usable, production-ready School Enterprise Resource Planning (ERP) platform built with **Next.js 16 (App Router)**, **TypeScript**, **PostgreSQL**, **Prisma ORM (Client Extension for Row-Level Multi-Tenancy)**, and **NextAuth**.
-
----
-
-## 🏗️ Multi-Tenancy Architecture
-
-```
-                                  ┌────────────────────────┐
-                                  │   Incoming HTTP Req    │
-                                  └───────────┬────────────┘
-                                              │
-                                              ▼
-                                  ┌────────────────────────┐
-                                  │  NextAuth Session Auth │
-                                  │   Extracts: schoolId   │
-                                  └───────────┬────────────┘
-                                              │
-                                              ▼
-                    ┌──────────────────────────────────────────────────┐
-                    │      Tenant Client (src/lib/tenant.ts)           │
-                    │   Auto-injects schoolId into query where/data    │
-                    │   Blocks cross-tenant updates/upserts/deletes    │
-                    └─────────────────────────┬────────────────────────┘
-                                              │
-                                              ▼
-                                  ┌────────────────────────┐
-                                  │   Prisma ORM Client    │
-                                  │   PostgreSQL Database  │
-                                  └────────────────────────┘
-```
-
-- **Row-Level Tenant Isolation**: Injected automatically across all operations. No query can read, mutate, or delete records belonging to another school.
-- **21 Tenant-Scoped Models**:
-  `User`, `Student`, `Parent`, `Class`, `Section`, `Subject`, `FeeStructure`, `FeeInvoice`, `Payment`, `Attendance`, `GradingScale`, `ExamSlot`, `ReportCard`, `Notice`, `Period`, `TimetableSlot`, `SyllabusTopic`, `CertificateLog`, `Department`, `LeaveRequest`, `Assignment`.
-- **Automated Schema Drift Guard**: `npm run check:tenant-scoping` introspects Prisma DMMF to block any un-scoped tenant models in CI/CD and development.
+Official Commercial Multi-Tenant School ERP Platform for Indian Schools (CBSE, ICSE, State Boards).
 
 ---
 
-## ✨ Core Features & Modules
+## 🏛️ Project Identity & Overview
 
-### 1. 👥 User Roles & Role-Based Portals
-- **Admin & Principal**: Full school configuration, class & section management, student admissions, cohort promotion, faculty roster, department hierarchy, fee structures, notices, certificates, TC register, and leave approval.
-- **Teacher**: Daily period timetable, syllabus milestone tracking, marks entry, attendance marking, homework & notes publishing, and personal leave applications.
-- **Parent**: Multi-child switcher, class weekly timetable, subject syllabus progress, homework with attachment downloads, fee invoices, payment receipts, and attendance tracking.
-- **Accountant**: Fee structures, bulk invoice generation, payment collection, and printable receipt generation.
-
-### 2. 🛡️ Security & PII Protection
-- **PII Encryption at Rest**: AES-256-GCM encryption for sensitive student data (Aadhaar numbers, medical conditions) via `src/lib/security.ts`.
-- **Aadhaar Masking**: Displays only last 4 digits (`XXXX-XXXX-1234`) on parent/teacher views.
-- **Rate Limiting**: Sliding-window rate limiter for sensitive endpoints.
-- **Zod Validation**: Strict schema validation on all incoming API requests via `src/lib/validations.ts`.
-
-### 3. 📂 Storage Abstraction
-- Unified `src/lib/storage.ts` driver supporting local disk storage during development and pluggable Cloudflare R2 / AWS S3 storage for cloud deployments.
-- Supports student photos, school logos, assignment attachments (up to 10MB), and certificate assets.
-
-### 4. 🎓 Academic Management & Year Rollover
-- **Student Promotion Workflow**: Promote cohorts (e.g., Class 5-A → Class 6-A), retain students, or graduate outgoing batches while preserving past academic year records.
-- **Configurable Grading Scales**: CBSE 9-point, ICSE percentage, or custom board grading per school.
-- **Examinations & Report Cards**: Term-wise marks entry, automated grade calculation, and downloadable official Report Card PDF.
-
-### 5. 💳 Fees & Invoicing Module
-- Class & Academic Year linked fee structures (Tuition, Lab, Activity, Admission).
-- Bulk invoice generation for classes/sections with custom due dates and discount support.
-- Payment recording with auto status updates (`UNPAID`, `PARTIALLY_PAID`, `PAID`, `OVERDUE`).
-- Downloadable official PDF payment receipts.
-
-### 6. 📅 Timetable & Attendance
-- Configurable bell schedule (teaching periods + recess/lunch).
-- Section weekly timetable with teacher conflict detection.
-- Fast attendance marking, monthly attendance percentages, and absentee alert roster generator.
+- **Official Product Name**: Vidyora
+- **Tagline**: Smarter Schools. Better Learning.
+- **Technology Stack**:
+  - **Framework**: Next.js 16 (App Router)
+  - **UI / Styling**: React 19, Tailwind CSS v4, Lucide Icons
+  - **Database**: Neon Serverless PostgreSQL 18.6
+  - **ORM**: Prisma 6.19.3
+  - **Security & Cryptography**: AES-256-GCM (PII Encryption), bcryptjs (Password Hashing)
+  - **Validation**: Zod 4.6.5
+  - **Mobile Container**: Capacitor 8 (Production App ID: `com.schoolerp.platform`)
+  - **Hosting Target**: Vercel
 
 ---
 
-## 🚀 Quick Start
+## 🛡️ Multi-Tenant Architecture & Defense-in-Depth
 
-### 1. Clone & Install
-```bash
-git clone https://github.com/prasadshirfule/school-erp.git
-cd school-erp
-npm install
+Vidyora enforces strict multi-tenant isolation across two independent layers:
+
+```text
+┌────────────────────────────────────────────────────────┐
+│               Authenticated Request                    │
+│      Trusted School ID extracted server-side           │
+└──────────────────────────┬─────────────────────────────┘
+                           │
+                           ▼
+┌────────────────────────────────────────────────────────┐
+│        Layer 1: Application-Level Tenant Client        │
+│          (src/lib/tenant/index.ts)                     │
+│  - Merges { schoolId } into every Prisma query        │
+│  - Blocks cross-tenant mutations & lookups             │
+│  - Fails closed on missing or blank tenant context     │
+└──────────────────────────┬─────────────────────────────┘
+                           │
+                           ▼
+┌────────────────────────────────────────────────────────┐
+│     Layer 2: PostgreSQL Row-Level Security (RLS)       │
+│        Scoped via withTenantContext(schoolId)          │
+│  - Executes inside a transaction                      │
+│  - Sets role to non-bypass role: vidyora_app (NOBYPASSRLS)
+│  - Sets session variable: app.current_school_id       │
+│  - PostgreSQL engine enforces RLS across all 33 tables │
+└──────────────────────────┬─────────────────────────────┘
+                           │
+                           ▼
+┌────────────────────────────────────────────────────────┐
+│              PostgreSQL Storage Engine                 │
+└────────────────────────────────────────────────────────┘
 ```
 
-### 2. Configure Environment Variables
-Copy `.env.example` to `.env`:
+---
+
+## 👥 Strict Role-Based Access Control (RBAC)
+
+Only 5 school roles exist in Vidyora. There is **no school-level SUPER_ADMIN**:
+
+1. **ADMIN**: Full school operational control (admissions, academic years, fee structures, settings).
+2. **PRINCIPAL**: Academic and leadership authority (result approval, publishing, staff rosters).
+3. **ACCOUNTANT**: Financial desk (offline fee collection, invoices, receipts, payment reversals).
+4. **TEACHER**: Classroom operations (attendance registers, marks entry, timetable).
+5. **PARENT**: Guardian portal (viewing authorized child attendance, report cards, fee receipts).
+
+---
+
+## 📐 Core Domain Invariants
+
+- **Student Attendance**: Strictly `PRESENT` and `ABSENT` only. No Late, Half Day, or Leave for students.
+- **School Fee Collection**: Offline only (`CASH`, `UPI`, `BANK_TRANSFER`). Zero online payment gateways or third-party checkouts.
+- **Annual Examination Result Rule**:
+  $$\text{Percentage} = \left(\frac{\text{Total Marks Obtained Across All Conducted Exams}}{\text{Total Maximum Marks Across Those Exams}}\right) \times 100$$
+- **Admission Numbers**: Unique per school and never reused.
+- **Receipt Numbers**: Unique sequential series per school, allocated atomically.
+
+---
+
+## 🚀 Getting Started
+
+### 1. Prerequisites
+- Node.js 20+ (Node.js 24 recommended)
+- Access to the Vidyora Staging Neon PostgreSQL database
+
+### 2. Configure Environment
 ```bash
-cp .env.example .env
+cp .env.example .env.local
 ```
-Ensure your `DATABASE_URL`, `NEXTAUTH_SECRET`, and `PII_ENCRYPTION_KEY` are configured.
+Ensure `.env.local` contains valid staging database connection strings (`DATABASE_URL` and `DATABASE_URL_UNPOOLED`).
 
-### 3. Database Migration & Seed
+### 3. Deploy Database Migrations & Enable RLS
 ```bash
-# Push schema to database
-npx prisma db push
-
-# Seed realistic demo data for 2 full Indian schools
-npm run prisma:seed # or: npx prisma db seed
+node scripts/run-migrate-staging.js
+node scripts/apply-rls.js
 ```
 
-### 4. Run Test Suites
+### 4. Seed Synthetic Development Records
 ```bash
-# Run all automated test suites (Tenant Scoping Guard, Isolation, Security, RBAC, PII)
+node scripts/run-seed-staging.js
+```
+
+### 5. Run Verification Test Suites
+```bash
 npm test
-
-# Or individually:
-npm run check:tenant-scoping # Introspects Prisma DMMF (21 direct + 4 relational models)
-npm run test:tenant          # 29-point multi-tenant isolation regression test
-npm run test:security        # 29-point PII encryption, Razorpay, rate limiting, and RBAC suite
 ```
 
-### 5. Start Development Server
+### 6. Start Development Server
 ```bash
 npm run dev
 ```
-Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ---
 
-## 🔑 Local Development Demo Credentials (Local Dev / Disposable Seed Only)
-> **Security Notice**: These sample credentials apply strictly to local development seeds created with `RESET_DB=true`. Production databases MUST never be seeded with demo accounts or default shared passwords.
+## 📁 Repository Structure
 
-| Tenant School | Role | Email |
-| :--- | :--- | :--- |
-| **Delhi Public Academy** (CBSE, Delhi) | Admin | `admin@dpa.edu.in` |
-| | Principal | `principal@dpa.edu.in` |
-| | Teacher | `ananya.sharma@dpa.edu.in` |
-| | Teacher | `vikram.malhotra@dpa.edu.in` |
-| | Parent | `parent.sharma@gmail.com` |
-| | Parent | `parent.verma@gmail.com` |
-| | Accountant | `accountant@dpa.edu.in` |
-| **St. Xavier's High School** (ICSE, Mumbai) | Admin | `admin@stxaviers.edu` |
-| | Teacher | `teacher.pereira@stxaviers.edu` |
-| | Parent | `parent.fernandes@gmail.com` |
-| | Accountant | `accountant@stxaviers.edu` |
-
----
-
-## 🐳 Docker Deployment
-
-To run the entire platform with PostgreSQL using Docker Compose:
-```bash
-docker-compose up --build -d
+```text
+├── android/                    # Android Capacitor native project container
+├── archive/                    # Archived legacy schemas, migrations, and code
+├── docs/                       # Architectural & design specifications
+├── prisma/
+│   ├── schema.prisma           # Fresh normalized relational schema (37 models)
+│   ├── migrations/             # Active migration history (0_init)
+│   ├── rls/                    # PostgreSQL RLS policies & runtime role definition
+│   └── seed.ts                 # Idempotent synthetic development seed
+├── public/                     # Static web assets
+├── scripts/                    # Automation and migration runner scripts
+├── src/
+│   ├── app/                    # Next.js App Router (layout, landing, portal stubs)
+│   ├── components/             # Reusable UI & toast notifications
+│   ├── lib/
+│   │   ├── authorization/      # 5-role definitions & permission matrix
+│   │   ├── database/           # Prisma client singleton
+│   │   ├── security/           # AES-256-GCM PII encryption, bcrypt hashing
+│   │   ├── tenant/             # Tenant client & transaction-local RLS runner
+│   │   ├── validation/         # Zod schemas for all domain workflows
+│   │   ├── env.ts              # Type-safe environment validation
+│   │   └── utils.ts            # Formatting, response helpers, CSS utilities
+│   ├── modules/                # Domain module definitions
+│   └── types/                  # Global TypeScript type definitions
+└── tests/
+    ├── unit/                   # Security & domain validation unit tests
+    └── tenant/                 # Real PostgreSQL tenant isolation & RLS tests
 ```
-Access the application at [http://localhost:3000](http://localhost:3000) and health check at [http://localhost:3000/api/health](http://localhost:3000/api/health).
+
+---
+
+## 📜 Quality Commands
+
+| Command | Description |
+| :--- | :--- |
+| `npm run lint` | Runs ESLint across `src/**/*.{ts,tsx}` |
+| `npm run test:unit` | Executes cryptography, domain, and validation unit tests |
+| `npm run test:tenant` | Executes multi-tenant isolation and PostgreSQL RLS tests against staging |
+| `npm test` | Runs both unit and tenant test suites |
+| `npm run build` | Produces an optimized Next.js production build |
