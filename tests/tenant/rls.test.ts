@@ -54,8 +54,63 @@ export async function runRlsTests() {
     /Missing or empty schoolId context/
   );
 
+  // 5. Verify restricted role vidyora_app has NOBYPASSRLS
+  const roleCheck = await prisma.$queryRaw<Array<{ rolname: string; rolbypassrls: boolean }>>`
+    SELECT rolname, rolbypassrls FROM pg_roles WHERE rolname = 'vidyora_app';
+  `;
+  assert.ok(roleCheck.length > 0, "Role vidyora_app must exist in PostgreSQL");
+  assert.strictEqual(
+    roleCheck[0].rolbypassrls,
+    false,
+    "Role vidyora_app must have rolbypassrls = false (NOBYPASSRLS)"
+  );
+
+  // 6. Test RLS on SecurityEvent table under vidyora_app
+  const secEvent1 = await prisma.securityEvent.create({
+    data: {
+      schoolId: school1.id,
+      eventType: "RLS_TEST_S1",
+    },
+  });
+  const secEvent2 = await prisma.securityEvent.create({
+    data: {
+      schoolId: school2.id,
+      eventType: "RLS_TEST_S2",
+    },
+  });
+  const secEventGlobal = await prisma.securityEvent.create({
+    data: {
+      schoolId: null,
+      eventType: "RLS_TEST_GLOBAL",
+    },
+  });
+
+  try {
+    const s1RlsEvents = await withTenantContext(school1.id, async (tx) => {
+      return tx.$queryRaw<Array<{ id: string; schoolId: string | null }>>`
+        SELECT id, "schoolId" FROM "SecurityEvent" WHERE "eventType" LIKE 'RLS_TEST_%'
+      `;
+    });
+    assert.strictEqual(s1RlsEvents.length, 1, "School 1 RLS context must see exactly 1 event (its own)");
+    assert.strictEqual(s1RlsEvents[0].schoolId, school1.id);
+
+    const s2RlsEvents = await withTenantContext(school2.id, async (tx) => {
+      return tx.$queryRaw<Array<{ id: string; schoolId: string | null }>>`
+        SELECT id, "schoolId" FROM "SecurityEvent" WHERE "eventType" LIKE 'RLS_TEST_%'
+      `;
+    });
+    assert.strictEqual(s2RlsEvents.length, 1, "School 2 RLS context must see exactly 1 event (its own)");
+    assert.strictEqual(s2RlsEvents[0].schoolId, school2.id);
+  } finally {
+    await prisma.securityEvent.deleteMany({
+      where: { id: { in: [secEvent1.id, secEvent2.id, secEventGlobal.id] } },
+    });
+  }
+
   console.log("    ✓ PostgreSQL RLS transaction-local scoping verified for School 1");
   console.log("    ✓ PostgreSQL RLS transaction-local scoping verified for School 2");
   console.log("    ✓ PostgreSQL RLS fails closed when tenant context does not match any school");
   console.log("    ✓ Missing tenant context in withTenantContext fails closed");
+  console.log("    ✓ PostgreSQL role vidyora_app verified to have NOBYPASSRLS");
+  console.log("    ✓ PostgreSQL RLS on SecurityEvent verified for school-scoped and global events");
 }

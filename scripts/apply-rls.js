@@ -94,10 +94,22 @@ async function main() {
                   WITH CHECK ("schoolId" = NULLIF(current_setting(''app.current_school_id'', true), ''''));
               ', tbl || '_tenant_isolation', tbl);
           END LOOP;
+
+          -- 4. Apply RLS to SecurityEvent (34th tenant model, nullable schoolId)
+          EXECUTE 'ALTER TABLE "SecurityEvent" ENABLE ROW LEVEL SECURITY;';
+          EXECUTE 'ALTER TABLE "SecurityEvent" FORCE ROW LEVEL SECURITY;';
+          EXECUTE 'DROP POLICY IF EXISTS "SecurityEvent_tenant_isolation" ON "SecurityEvent";';
+          EXECUTE '
+              CREATE POLICY "SecurityEvent_tenant_isolation" ON "SecurityEvent"
+              FOR ALL
+              TO vidyora_app
+              USING ("schoolId" IS NOT NULL AND "schoolId" = NULLIF(current_setting(''app.current_school_id'', true), ''''))
+              WITH CHECK ("schoolId" IS NOT NULL AND "schoolId" = NULLIF(current_setting(''app.current_school_id'', true), ''''));
+          ';
       END $$;
     `);
 
-    console.log('RLS policies enabled and forced across all 33 tenant-scoped tables.');
+    console.log('RLS policies enabled and forced across all 34 tenant-scoped tables (including SecurityEvent).');
 
     // Verify RLS status
     const rlsStatus = await prisma.$queryRaw`

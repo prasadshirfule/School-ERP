@@ -6,6 +6,7 @@ import {
   verifyVerificationToken,
 } from "../../src/lib/security/tokens";
 import { sha256Hash } from "../../src/lib/security/hashing";
+import { checkRateLimit } from "../../src/lib/security/rateLimit";
 
 export async function runOtpTests() {
   console.log("  Running Cryptographic OTP & Token Verification Tests...");
@@ -147,8 +148,25 @@ export async function runOtpTests() {
   assert.strictEqual(expiredResult.error, "EXPIRED");
   console.log("    ✓ Token expiration fail-closed enforcement verified");
 
-  // Cleanup test tokens
+  // 7. SEC-P2-09: OTP Verification Flood & Rate Limiting Test
+  const floodKey = `ratelimit:test_otp_flood:${Date.now()}`;
+  const r1 = await checkRateLimit(floodKey, { limit: 3, windowSeconds: 60 });
+  const r2 = await checkRateLimit(floodKey, { limit: 3, windowSeconds: 60 });
+  const r3 = await checkRateLimit(floodKey, { limit: 3, windowSeconds: 60 });
+  const r4 = await checkRateLimit(floodKey, { limit: 3, windowSeconds: 60 });
+
+  assert.strictEqual(r1.allowed, true);
+  assert.strictEqual(r2.allowed, true);
+  assert.strictEqual(r3.allowed, true);
+  assert.strictEqual(r4.allowed, false, "4th request within 3-request limit window must be rate limited");
+  assert.strictEqual(r4.remaining, 0);
+  console.log("    ✓ SEC-P2-09: OTP verification request flooding blocked by rate limiter");
+
+  // Cleanup test tokens and rate limit bucket
   await prisma.verificationToken.deleteMany({
     where: { identifier: { in: [testId, validTestId, expiredTestId] } },
+  });
+  await prisma.rateLimitBucket.deleteMany({
+    where: { key: floodKey },
   });
 }

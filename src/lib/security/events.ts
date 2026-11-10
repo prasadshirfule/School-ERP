@@ -69,3 +69,26 @@ export async function logSecurityEvent(options: LogSecurityEventOptions): Promis
     console.error("[SecurityEvent] Failed to record security event:", error);
   }
 }
+
+/**
+ * Retrieves global security events (platform-wide events where schoolId is NULL).
+ * Accessible ONLY through explicitly authorized platform/system audit procedures.
+ * School tenants cannot query or view global security events.
+ */
+export async function getGlobalSecurityEvents(options?: {
+  limit?: number;
+  offset?: number;
+  eventType?: string;
+  severity?: SecurityEventSeverity;
+}) {
+  return prisma.securityEvent.findMany({
+    where: {
+      schoolId: null,
+      ...(options?.eventType ? { eventType: options.eventType } : {}),
+      ...(options?.severity ? { severity: options.severity } : {}),
+    },
+    orderBy: { createdAt: "desc" },
+    take: options?.limit ?? 50,
+    skip: options?.offset ?? 0,
+  });
+}

@@ -10,6 +10,38 @@ import { SchoolStatus } from "@prisma/client";
 const SESSION_MAX_AGE_SECONDS = 12 * 60 * 60; // 12 hours max lifetime
 const INACTIVITY_TIMEOUT_SECONDS = 2 * 60 * 60; // 2 hours inactivity limit
 
+/**
+ * Resolves the authentication secret with strict environment validation.
+ * Fails fast and throws fatal error in production if NEXTAUTH_SECRET is absent or weak.
+ */
+export function resolveAuthSecret(env: NodeJS.ProcessEnv = process.env): string {
+  const secret = env.NEXTAUTH_SECRET;
+  const isProduction = env.NODE_ENV === "production";
+  const isTest = env.NODE_ENV === "test";
+
+  if (!secret || secret.trim().length === 0) {
+    if (isProduction) {
+      throw new Error(
+        "FATAL CONFIGURATION ERROR: NEXTAUTH_SECRET environment variable is missing in production. Application startup aborted to prevent session forging."
+      );
+    }
+    if (isTest) {
+      return "test-environment-ephemeral-jwt-secret-minimum-32-chars";
+    }
+    throw new Error(
+      "CONFIGURATION ERROR: NEXTAUTH_SECRET is required. Please define NEXTAUTH_SECRET in your .env or .env.local file."
+    );
+  }
+
+  if (secret.length < 32) {
+    throw new Error(
+      "CONFIGURATION ERROR: NEXTAUTH_SECRET must be at least 32 characters long to ensure cryptographic security."
+    );
+  }
+
+  return secret;
+}
+
 export const authOptions: NextAuthOptions = {
   session: {
     strategy: "jwt",
@@ -206,5 +238,5 @@ export const authOptions: NextAuthOptions = {
       },
     },
   },
-  secret: process.env.NEXTAUTH_SECRET || "vidyora-dev-jwt-super-secret-key-at-least-32-chars",
+  secret: resolveAuthSecret(),
 };

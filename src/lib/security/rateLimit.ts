@@ -3,6 +3,11 @@ import { prisma } from "../database/prisma";
 export interface RateLimitConfig {
   limit: number;
   windowSeconds: number;
+  /**
+   * Whether to fail closed (allowed: false) when the rate limiter backing store is unreachable.
+   * Defaults to `true` for security-sensitive authentication and verification paths.
+   */
+  failClosed?: boolean;
 }
 
 export interface RateLimitResult {
@@ -10,6 +15,8 @@ export interface RateLimitResult {
   count: number;
   remaining: number;
   resetAt: Date;
+  isBackendFailure?: boolean;
+  error?: string;
 }
 
 /**
@@ -66,14 +73,29 @@ export async function checkRateLimit(
       resetAt: updated.expiresAt,
     };
   } catch (error) {
-    // If rate limiter experiences transient database issue, fail safe or log
-    console.error(`[RateLimiter] Error evaluating key ${key}:`, error);
-    // Return allowed with 1 remaining so critical user flows aren't broken by transient DB errors
+    // Log database failure safely without leaking credentials or query text
+    console.error(`[RateLimiter] Backing store error evaluating key ${key}:`, error instanceof Error ? error.message : "Database error");
+    const shouldFailClosed = config.failClosed ?? true;
+
+    if (shouldFailClosed) {
+      // Fail closed for security-critical endpoints to prevent brute-force attacks during database degradation
+      return {
+        allowed: false,
+        count: limit + 1,
+        remaining: 0,
+        resetAt,
+        isBackendFailure: true,
+        error: "RATE_LIMITER_SERVICE_UNAVAILABLE",
+      };
+    }
+
+    // For non-critical background operations explicitly configured with failClosed: false
     return {
       allowed: true,
       count: 1,
       remaining: 1,
       resetAt,
+      isBackendFailure: true,
     };
   }
 }

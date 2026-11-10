@@ -81,4 +81,18 @@ BEGIN
             WITH CHECK ("schoolId" = NULLIF(current_setting(''app.current_school_id'', true), ''''));
         ', tbl || '_tenant_isolation', tbl);
     END LOOP;
+
+    -- 3. APPLY SPECIALIZED RLS TO SecurityEvent (34th Tenant Table with Nullable schoolId)
+    -- Global events (schoolId IS NULL) are invisible to tenant role vidyora_app.
+    -- Tenant events (schoolId = current_school_id) are strictly visible only to that tenant.
+    EXECUTE 'ALTER TABLE "SecurityEvent" ENABLE ROW LEVEL SECURITY;';
+    EXECUTE 'ALTER TABLE "SecurityEvent" FORCE ROW LEVEL SECURITY;';
+    EXECUTE 'DROP POLICY IF EXISTS "SecurityEvent_tenant_isolation" ON "SecurityEvent";';
+    EXECUTE '
+        CREATE POLICY "SecurityEvent_tenant_isolation" ON "SecurityEvent"
+        FOR ALL
+        TO vidyora_app
+        USING ("schoolId" IS NOT NULL AND "schoolId" = NULLIF(current_setting(''app.current_school_id'', true), ''''))
+        WITH CHECK ("schoolId" IS NOT NULL AND "schoolId" = NULLIF(current_setting(''app.current_school_id'', true), ''''));
+    ';
 END $$;

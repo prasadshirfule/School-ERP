@@ -1,5 +1,6 @@
 import { Role } from "@prisma/client";
 import { prisma } from "../database/prisma";
+import { withTenantContext } from "../tenant";
 import { logSecurityEvent } from "../security/events";
 
 export class LifecycleError extends Error {
@@ -11,25 +12,28 @@ export class LifecycleError extends Error {
 
 /**
  * Protects against removing or suspending the sole active Administrator of a school.
+ * Operates strictly within verified tenant context.
  */
 export async function assertNotSoleAdmin(schoolId: string, targetUserId: string): Promise<void> {
-  const activeAdmins = await prisma.schoolMembership.findMany({
-    where: {
-      schoolId,
-      role: Role.ADMIN,
-      isActive: true,
-      user: {
+  return withTenantContext(schoolId, async (tenantTx) => {
+    const activeAdmins = await tenantTx.schoolMembership.findMany({
+      where: {
+        schoolId,
+        role: Role.ADMIN,
         isActive: true,
+        user: {
+          isActive: true,
+        },
       },
-    },
-  });
+    });
 
-  const isTargetAdmin = activeAdmins.some((m) => m.userId === targetUserId);
-  if (isTargetAdmin && activeAdmins.length <= 1) {
-    throw new LifecycleError(
-      "Operation rejected: Cannot remove or suspend the sole active Administrator of the school. Appoint another Administrator first."
-    );
-  }
+    const isTargetAdmin = activeAdmins.some((m) => m.userId === targetUserId);
+    if (isTargetAdmin && activeAdmins.length <= 1) {
+      throw new LifecycleError(
+        "Operation rejected: Cannot remove or suspend the sole active Administrator of the school. Appoint another Administrator first."
+      );
+    }
+  });
 }
 
 /**
@@ -107,17 +111,19 @@ export async function revokeSchoolMembership(
     throw new LifecycleError("Cannot revoke your own school membership.");
   }
 
-  await prisma.schoolMembership.update({
-    where: {
-      schoolId_userId: {
-        schoolId,
-        userId: targetUserId,
+  await withTenantContext(schoolId, async (tenantTx) => {
+    await tenantTx.schoolMembership.update({
+      where: {
+        schoolId_userId: {
+          schoolId,
+          userId: targetUserId,
+        },
       },
-    },
-    data: {
-      isActive: false,
-      revokedAt: new Date(),
-    },
+      data: {
+        isActive: false,
+        revokedAt: new Date(),
+      },
+    });
   });
 
   // Increment session version to force re-evaluation of school memberships
